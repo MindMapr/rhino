@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI(
     title="🦏 Rhino Service",
-    description="Handles all interactions from frontend", # update description when relevant
+    description="Handles all interactions from frontend", # update description if relevant
     version="0.0.1"
 )
 
