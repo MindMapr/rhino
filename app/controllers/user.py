@@ -1,8 +1,7 @@
 from bson import ObjectId
 from fastapi import HTTPException, status
 
-#from app.utils.hasher import Hasher
-
+from ..utils.hasher import Hasher
 from ..models.user import User
 
 class UserList:
@@ -24,7 +23,8 @@ class UserList:
                 detail = "Email already taken"
             )
 
+        # Hashing password with bcrypt from CryptContext
+        hashed_password = Hasher.get_password_hash(user.password)
+        user.password = hashed_password
+        
         _ = self.db.insert_one(user.model_dump(by_alias=True))
-
-# # Hashing password with bcrypt from CryptContext
-#         hashed_password = Hasher.get_password_hash(user.password)

@@ -16,3 +16,5 @@ class User(BaseModel):
             raise ValueError("Password must be at least 8 characters")
         # Should we do a check for special characters?
         return data
+    
+    # TODO: add field_validator for email - confirm @ etc.
