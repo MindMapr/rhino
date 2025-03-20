@@ -1,7 +1,7 @@
 import os
 import certifi
 from pymongo import MongoClient
-from detenv import load_dotenv
+from dotenv import load_dotenv
 
 # Loading the connection variable from .env file
 load_dotenv()

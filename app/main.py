@@ -2,6 +2,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 
+# Routers
+from .routes.user import router as user_v1
+
 app = FastAPI(
     title="🦏 Rhino Service",
     description="Handles all interactions from frontend", # update description if relevant
@@ -22,6 +25,9 @@ app.add_middleware(
     allow_methods = ["*"],
     allow_headers = ["*"]
 )
+
+# include routers
+app.include_router(user_v1, prefix="/v1")
 
 
 @app.get("/")
