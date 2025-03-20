@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from pymongo import MongoClient
 
 app = FastAPI(
     title="🦏 Rhino Service",
@@ -26,3 +27,13 @@ app.add_middleware(
 @app.get("/")
 async def root():
     return {"message": "Hello World"}
+
+# Test the connection to the database
+@app.get("/test-connection", tags=["Test Connection"])
+async def test_connection():
+    try:
+        client = MongoClient()  # Create a MongoClient instance
+        client.server_info()  # Test the connection
+        return {"message": "Connection successful"}
+    except Exception as e:
+        return {"message": f"Connection failed: {str(e)}"}
