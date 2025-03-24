@@ -14,7 +14,8 @@ app = FastAPI(
 # Used for CORS
 origins = [
     "http://localhost",
-    "http://localhost:8000"
+    "http://localhost:8000",
+    "htto://localhost:300" # Next.js default localhost
 ]
 
 # Include CORS middleware
