@@ -17,12 +17,13 @@ class UserList:
     def __init__(self, db):
         self.db = db
 
+    # Find all users in the collection and return them as a list
     def get_all_users(self) -> List[User]:
         result = self.db.find()
         number_of_users = self.db.count_documents({})
         return {
             "status": status.HTTP_200_OK,
-            "meta": number_of_users,
+            "meta": number_of_users, # prints the amount of users in the collection - only metadata, so cannot be used in FE
             "data": [User(**user) for user in result]
         }
 
@@ -31,7 +32,6 @@ class UserList:
         if result:
             return {
                 "status": status.HTTP_200_OK,
-                # FIX: print the user document - validation error
                 "data": User(**result)
             }
         else:

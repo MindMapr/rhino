@@ -1,7 +1,7 @@
 from pydantic import BaseModel, Field, field_validator, EmailStr
 from typing import Optional
 from uuid import UUID, uuid4
-from datetime import datetime, UTC
+from datetime import datetime
 # from ..utils.parse_objectId import PydanticObjectId
 
 # User schema
@@ -10,7 +10,7 @@ class User(BaseModel):
     username: str
     email: EmailStr
     password: str
-    created_at: datetime = Field(default_factory = lambda: datetime.now(UTC))
+    created_at: datetime = Field(default_factory = lambda: datetime.now())
     # SUGGESTION: Maybe a personal enum for task they create, that we do not have?
     # TODO: add profile image?
 
