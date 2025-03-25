@@ -4,6 +4,7 @@ from pymongo import MongoClient
 
 # Routers
 from .routes.user import router as user_v1
+from .routes.time_frame import router as time_frame_v1
 
 app = FastAPI(
     title="🦏 Rhino Service",
@@ -15,6 +16,7 @@ app = FastAPI(
 origins = [
     "http://localhost",
     "http://localhost:8000",
+    "http://127.0.0.1:8000",
     "htto://localhost:300" # Next.js default localhost
 ]
 
@@ -29,6 +31,7 @@ app.add_middleware(
 
 # include routers
 app.include_router(user_v1, prefix="/v1")
+app.include_router(time_frame_v1, prefix="/v1")
 
 
 @app.get("/")
