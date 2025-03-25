@@ -1,10 +1,11 @@
 # Imports
 from fastapi import HTTPException, status
 from typing import List
+from uuid import UUID
+from bson import ObjectId
 
 # Utils
 from ..utils.hasher import Hasher
-from ..utils.parse_objectId import PydanticObjectId
 
 # Models
 from ..models.user import User, UserUpdate
@@ -18,11 +19,12 @@ class UserList:
         self.db = db
 
     def get_user(self, user_id: str):
-        result = self.db.find_one({"_id": PydanticObjectId(user_id)})
+        result = self.db.find_one({"_id": UUID(user_id)})
         if result:
             return {
                 "status": status.HTTP_200_OK,
                 # FIX: print the user document - validation error
+                "data": User(**result)
             }
         else:
             raise HTTPException(
@@ -58,7 +60,7 @@ class UserList:
             update_field["password"] = Hasher.get_password_hash(user.password)
 
         result = self.db.update_one(
-                {"_id": PydanticObjectId(user_id)},
+                {"_id": UUID(user_id)},
                 {"$set": update_field}
             )
         if result.modified_count:
@@ -75,7 +77,7 @@ class UserList:
 
     # Delete user from database - needs protected routing to avoid issues
     def delete_user(self, user_id: str):
-        result = self.db.delete_one({"_id": PydanticObjectId(user_id)})
+        result = self.db.delete_one({"_id": UUID(user_id)})
         if result.deleted_count:
             return {
                 "status": status.HTTP_200_OK,

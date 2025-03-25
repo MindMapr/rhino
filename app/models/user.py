@@ -1,19 +1,16 @@
 from pydantic import BaseModel, Field, field_validator
 from typing import Optional
+from uuid import UUID, uuid4
 from datetime import datetime, UTC
-from ..utils.parse_objectId import PydanticObjectId
+# from ..utils.parse_objectId import PydanticObjectId
 
 # User schema
 class User(BaseModel):
-    user_id: PydanticObjectId = Field(default_factory=PydanticObjectId, alias="_id") 
+    user_id: UUID = Field(default_factory=uuid4, alias="_id") 
     username: str
     email: str
     password: str
     created_at: datetime = Field(default_factory = lambda: datetime.now(UTC))
-    model_config = { 
-        "populate_by_name": True,
-        "arbitrary_types_allowed": True
-    }
     # TODO: add profile image?
 
     
