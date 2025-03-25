@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, EmailStr
 from typing import Optional
 from uuid import UUID, uuid4
 from datetime import datetime, UTC
@@ -8,9 +8,10 @@ from datetime import datetime, UTC
 class User(BaseModel):
     user_id: UUID = Field(default_factory=uuid4, alias="_id") 
     username: str
-    email: str
+    email: EmailStr
     password: str
     created_at: datetime = Field(default_factory = lambda: datetime.now(UTC))
+    # SUGGESTION: Maybe a personal enum for task they create, that we do not have?
     # TODO: add profile image?
 
     
