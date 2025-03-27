@@ -29,7 +29,6 @@ class Token(BaseModel):
     token_type: str
 
 
-
 def create_access_token(username: str, user_id: str, expires_delta: timedelta):
     encode = {"sub": username, "_id": str(user_id)}
     expires = datetime.now(timezone.utc) + expires_delta

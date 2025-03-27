@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Response, Depends
 from typing import Annotated
 from pydantic import BaseModel
-from datetime import datetime, date, time
+from datetime import datetime, date, timezone
 
 from ..models.time_frame import TimeFrame, WorkTimeIntervals
 from ..models.user import User
@@ -34,7 +34,8 @@ async def create_time_frame(params: CreateTimeFrame, current_user: user_dependen
         user_id = current_user["_id"],
         start_date=params.start_date,
         end_date=params.end_date,
-        work_time_frame_intervals=params.work_intervals,
-        include_weekend=params.include_weekend
+        work_time_frame_intervals=[params.work_intervals],
+        include_weekend=params.include_weekend,
+        created_at=datetime.now(timezone.utc)
     )                            
     return list_routes.create_time_frame(time_frame)
