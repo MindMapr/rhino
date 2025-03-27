@@ -39,6 +39,26 @@ class UserList:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=not_found_404
             )
+    
+    # Used in auth for token validation
+    def get_user_by_username(self, username: str):
+        result = self.db.find_one({"username": username})
+        return User(**result)
+    
+    def authenticate_user(self, username: str, password: str):
+        user = self.get_user_by_username(username=username)
+        if not user:
+            raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        if not Hasher.verify_password(plain_password=password, hashed_password=user.password):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect password"
+            )
+        return user
 
     def create_user(self, user: User):
         # check if username or email is already taken

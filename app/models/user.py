@@ -19,8 +19,6 @@ class User(BaseModel):
     def check_password(cls, data: str) -> str: # cls is described as the class to create the Pydantic dataclass from
         return validate_password(data)
     
-    # TODO: add field_validator for email - confirm @ etc.
-
 # Used for updating the user document
 class UserUpdate(BaseModel):
     username: Optional[str] = None

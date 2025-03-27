@@ -17,7 +17,7 @@ origins = [
     "http://localhost",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
-    "htto://localhost:300" # Next.js default localhost
+    "htto://localhost:3000" # Next.js default localhost
 ]
 
 # Include CORS middleware
