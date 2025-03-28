@@ -1,10 +1,9 @@
-from fastapi import APIRouter, Response, Depends
+from fastapi import APIRouter, Depends
 from typing import Annotated
 from pydantic import BaseModel
 from datetime import datetime, date, timezone
 
-from ..models.time_frame import TimeFrame, WorkTimeIntervals
-from ..models.user import User
+from ..models.time_frame import TimeFrame, WorkTimeIntervals, UpdateTimeFrame
 from ..database.mongodb import database
 from ..controllers.time_frame import TimeFrameList
 from ..utils.auth import get_current_user
@@ -39,3 +38,24 @@ async def create_time_frame(params: CreateTimeFrame, current_user: user_dependen
         created_at=datetime.now(timezone.utc)
     )                            
     return list_routes.create_time_frame(time_frame)
+
+# Consider if it should be protected?
+@router.get("/all_time_frames", description="Find all time frames in database")
+async def get_all_time_frames():
+    return list_routes.get_all_time_frames()
+
+@router.get("/", description="Find a specific time frame based on a given time frame id")
+async def get_single_time_frame(time_frame_id: str, current_user: user_dependency):
+    return list_routes.get_single_time_frame(time_frame_id)
+
+@router.get("/all_user_time_frames", description="Find all time frames from a specific user")
+async def get_all_user_specific_time_frames(current_user: user_dependency):
+    return list_routes.get_all_user_specific_time_frames(current_user["_id"])
+
+@router.put("/", description="Update a specific time_frame")
+async def update_time_frame(time_frame_id: str, time_frame: UpdateTimeFrame, current_user: user_dependency):
+    return list_routes.update_time_frame(time_frame_id, time_frame)
+
+@router.delete("/{id}")
+async def delete_time_frame(time_frame_id: str, current_user: user_dependency):
+    return list_routes.delete_time_frame(time_frame_id)

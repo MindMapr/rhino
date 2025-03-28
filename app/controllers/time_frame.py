@@ -2,7 +2,7 @@ from fastapi import HTTPException, status
 from uuid import UUID
 from typing import List
 
-from ..models.time_frame import TimeFrame
+from ..models.time_frame import TimeFrame, UpdateTimeFrame
 
 # Constants
 not_found_404 = "Time Frame not found"
@@ -11,6 +11,7 @@ class TimeFrameList():
     def __init__(self, db):
         self.db = db
 
+    # Get all time frames in database
     def get_all_time_frames(self) -> List[TimeFrame]:
         result = self.db.find()
         number_of_time_frames = self.db.count_documents({})
@@ -21,6 +22,7 @@ class TimeFrameList():
             "data": [TimeFrame(**time_frame) for time_frame in result]
         }
     
+    # Get a specific time frame from the database
     def get_single_time_frame(self, time_frame_id: str):
         result = self.db.find_one({"_id": UUID(time_frame_id)})
         if result:
@@ -34,5 +36,52 @@ class TimeFrameList():
                 detail=not_found_404 
             )
         
+    # Get all time frames for a specific user
+    def get_all_user_specific_time_frames(self, user_id: str) -> List[TimeFrame]:
+        result = self.db.find({"user_id": UUID(user_id)})
+
+        return {
+            "status": status.HTTP_200_OK,
+            "data": [TimeFrame(**time_frame) for time_frame in result]
+        }
+        
     def create_time_frame(self, time_frame: TimeFrame):
+        if time_frame.start_date > time_frame.end_date:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="End date cannot be before start date."
+            )
+
         _ = self.db.insert_one(time_frame.model_dump(by_alias=True))
+
+    def update_time_frame(self, time_frame_id: str, time_frame: UpdateTimeFrame):
+        update_field = time_frame.model_dump(exclude_unset=True)
+
+        result = self.db.update_one(
+                {"_id": UUID(time_frame_id)},
+                {"$set": update_field}
+            )
+        if result.modified_count:
+            return {
+                "status": status.HTTP_200_OK,
+                "data": {"time_frame": str(result)}
+            }
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=not_found_404
+            )
+
+    def delete_time_frame(self, time_frame_id: str):
+        # should we do a check if the time_frame they are deleting has a match on their own id?
+        result = self.db.delete_one({"_id": UUID(time_frame_id)})
+        if result.deleted_count:
+            return {
+                "status": status.HTTP_200_OK,
+                "data": {"time_frame": str(result)}
+            }
+        else:
+            raise HTTPException(
+                status_code = status.HTTP_404_NOT_FOUND,
+                detail = not_found_404
+            )
