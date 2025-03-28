@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field,  model_validator
+from typing import Optional
 from datetime import datetime
 from uuid import UUID, uuid4
 
@@ -26,6 +27,6 @@ class TimeFrame(BaseModel):
 
 # Should we allow for updates in work_time_frame_intervals? Could imagine it could get quite complex
 class UpdateTimeFrame(BaseModel):
-    start_date: datetime
-    end_date: datetime
-    include_weekend: bool
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    include_weekend: Optional[bool] = None

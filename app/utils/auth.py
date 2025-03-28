@@ -52,3 +52,5 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate user because of jwt: {username}, {user_id}"
         )
+
+# TODO: Expand  ACCESS_TOKEN_EXPIRE_MINUTES when user interacts with website
