@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Header, Body
 from typing import Annotated
 from datetime import timedelta
 from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 import os
 
@@ -51,12 +52,12 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
         )
     access_token = auth.create_access_token(user.username, user.user_id, timedelta(minutes=int(ACCESS_TOKEN_EXPIRE_MINUTES)))
     refresh_token = auth.create_refresh_token(user.username, user.user_id, timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
+    response = JSONResponse(
+        content={"access_token": access_token, "token_type": "bearer"}
+    )
+    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=True)
     print("Refresh: " + refresh_token)
-    return {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_type": "bearer"
-    }
+    return response
 
 @router.post("/refresh", response_model=auth.Token)
 async def refresh_for_new_access_token(refresh_token: str = Body(...)):

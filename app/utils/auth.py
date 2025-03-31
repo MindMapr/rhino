@@ -36,8 +36,13 @@ def create_access_token(username: str, user_id: str, expires_delta: timedelta):
     print(encoded_jwt)
     return encoded_jwt
 
+# Refresh token is based on this article: 
+# https://gh0stfrk.medium.com/token-based-authentication-with-fastapi-7d6a22a127bf
 def create_refresh_token(username: str, user_id: str, expires_delta: timedelta):
-    payload = {"sub": username, "_id": str(user_id)}
+    payload = {
+        "sub": username, 
+        "_id": str(user_id)
+    }
     expires = datetime.now(timezone.utc) + expires_delta
     payload.update({"exp": expires})
     refresh_jwt = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
@@ -49,30 +54,38 @@ def refresh_for_new_access_token(refresh_token: str):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Token has been revoked"
         )
+    if refresh_token is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No refresh token available"
+        )
     try:
         payload = jwt.decode(refresh_token, SECRET_KEY, algorithms=[ALGORITHM])
         username = payload.get("sub")
         user_id = payload.get("_id")
-        if username or user_id is None:
+        if username is None or user_id is None:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid refresh token"
             )
+        
+        new_access_token = create_access_token(username, user_id, timedelta(minutes=int(ACCESS_TOKEN_EXPIRE_MINUTES)))
+        return {
+            "access_token": new_access_token,
+            "token_type": "bearer"
+        }
+
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid refresh token"
+            detail="JWT Error: Invalid refresh token"
         )
-    new_access_token = create_access_token(username, user_id, timedelta(minutes=int(ACCESS_TOKEN_EXPIRE_MINUTES)))
-    return {
-        "access_token": new_access_token,
-        "token_type": "bearer"
-    }
 
 # Consider using redis for blacklisted tokens - best approach
 # Or just a document in our MongoDB
 # blacklist is for storing invalid tokens, used for logout
 # Based on https://www.restack.io/p/fastapi-logout-answer
+# TODO: blacklist refresh tokens
 blacklist = set()
 
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
@@ -97,11 +110,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
             detail="Could not validate user because of jwt}"
         )
 
-# TODO: Refresh token
-# async def create_refresh_token(data: dict[str, Any], expires_delta: Optional[timedelta] = None):
-
-
-# Currently unsure if this actually works
+# Currently unsure if this actually works - and if we should keep it
 async def logout(token: Annotated[str, Depends(oauth2_scheme)]):
     blacklist.add(token)
     print(blacklist)
