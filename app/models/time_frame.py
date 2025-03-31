@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field,  model_validator
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 from uuid import UUID, uuid4
 
 # object containing the time periods during the day, where to user would like to work
@@ -30,3 +30,9 @@ class UpdateTimeFrame(BaseModel):
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
     include_weekend: Optional[bool] = None
+
+class CreateTimeFrame(BaseModel):
+    start_date: date
+    end_date: date
+    work_intervals: WorkTimeIntervals
+    include_weekend: bool

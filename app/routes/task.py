@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Depends
-from typing import Annotated, Optional
-from pydantic import BaseModel, Field
-from datetime import datetime, timedelta
+from typing import Annotated
+from datetime import timedelta
 
-from ..models.task import Task, TaskCategory, UpdateTask
+from ..models.task import Task, UpdateTask, CreateTask
 from ..database.mongodb import database
 from ..controllers.task import TaskList
 from ..utils.auth import get_current_user
@@ -19,14 +18,6 @@ list_routes = TaskList(collection)
 
 # Dependencies
 user_dependency = Annotated[dict, Depends(get_current_user)]
-
-class CreateTask(BaseModel):
-    title: str
-    priority: int
-    duration: float
-    start: datetime
-    category: TaskCategory
-    description: Optional[str] = ""
 
 @router.post("/{time_frame_id}", status_code=201)
 async def create_task(time_frame_id: str, params: CreateTask, current_user: user_dependency):

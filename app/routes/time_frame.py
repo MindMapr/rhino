@@ -1,9 +1,8 @@
 from fastapi import APIRouter, Depends
 from typing import Annotated
-from pydantic import BaseModel
-from datetime import datetime, date, timezone
+from datetime import datetime, timezone
 
-from ..models.time_frame import TimeFrame, WorkTimeIntervals, UpdateTimeFrame
+from ..models.time_frame import TimeFrame, UpdateTimeFrame, CreateTimeFrame
 from ..database.mongodb import database
 from ..controllers.time_frame import TimeFrameList
 from ..utils.auth import get_current_user
@@ -19,12 +18,6 @@ list_routes = TimeFrameList(collection)
 
 # Dependencies
 user_dependency = Annotated[dict, Depends(get_current_user)]
-
-class CreateTimeFrame(BaseModel):
-    start_date: date
-    end_date: date
-    work_intervals: WorkTimeIntervals
-    include_weekend: bool
 
 @router.post("", status_code=201)
 async def create_time_frame(params: CreateTimeFrame, current_user: user_dependency):

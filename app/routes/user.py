@@ -1,18 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr
+from fastapi import APIRouter, Depends, HTTPException, status, Header, Body
 from typing import Annotated
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from fastapi.security import OAuth2PasswordRequestForm
 from dotenv import load_dotenv
 import os
 
-from ..models.user import User, UserUpdate
+from ..models.user import User, UserUpdate, CreateUserRequest
 from ..database.mongodb import database as db
 from ..controllers.user import UserList
 import app.utils.auth as auth
 
 load_dotenv()
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"))
+REFRESH_TOKEN_EXPIRE_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS"))
 
 # Setup collection
 collection = db.user
@@ -25,12 +25,6 @@ list_routes = UserList(collection)
 
 # Dependencies
 user_dependency = Annotated[dict, Depends(auth.get_current_user)]
-
-# Used to handle input when creating a new user to avoid manually creating _id
-class CreateUserRequest(BaseModel):
-    username: str
-    email: EmailStr
-    password: str
 
 @router.get("/all_users", description="Find all users")
 async def get_all_users():
@@ -55,11 +49,23 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate user"
         )
-    token = auth.create_access_token(user.username, user.user_id, timedelta(minutes=int(ACCESS_TOKEN_EXPIRE_MINUTES)))
+    access_token = auth.create_access_token(user.username, user.user_id, timedelta(minutes=int(ACCESS_TOKEN_EXPIRE_MINUTES)))
+    refresh_token = auth.create_refresh_token(user.username, user.user_id, timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
+    print("Refresh: " + refresh_token)
     return {
-        "access_token": token,
+        "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer"
     }
+
+@router.post("/refresh", response_model=auth.Token)
+async def refresh_for_new_access_token(refresh_token: str = Body(...)):
+    return auth.refresh_for_new_access_token(refresh_token)
+
+@router.post("/logout")
+async def logout_for_access_token(token: str, dependencies: user_dependency):
+    auth.logout(token)
+
 
 @router.put("", description="Update user information")
 async def update_user(user: UserUpdate, current_user: user_dependency):

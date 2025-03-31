@@ -30,6 +30,12 @@ class UserUpdate(BaseModel):
         if data is None:
             return data
         return validate_password(data)
+    
+# Used to handle input when creating a new user to avoid manually creating _id
+class CreateUserRequest(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
 
 # Pydantic model validator to enforce our specified password requirements
 def validate_password(data: str) -> str:

@@ -34,3 +34,11 @@ class UpdateTask(BaseModel):
     category: Optional[TaskCategory] = None
     description: Optional[str] = None 
     completed: Optional[bool] = None 
+
+class CreateTask(BaseModel):
+    title: str
+    priority: int
+    duration: float
+    start: datetime
+    category: TaskCategory
+    description: Optional[str] = None
