@@ -18,7 +18,7 @@ origins = [
     "http://localhost",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
-    "htto://localhost:3000" # Next.js default localhost
+    "http://localhost:3000", # Next.js default localhost
 ]
 
 # Include CORS middleware
@@ -38,6 +38,7 @@ app.include_router(task_v1, prefix="/v1")
 
 @app.get("/")
 async def root():
+    print("Successful backend connection")
     return {"message": "Hello World"}
 
 # Test the connection to the database
