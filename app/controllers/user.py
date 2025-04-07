@@ -43,7 +43,14 @@ class UserList:
     # Used in auth for token validation
     def get_user_by_username(self, username: str):
         result = self.db.find_one({"username": username})
-        return User(**result)
+        if result:
+            return User(**result)
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=not_found_404
+            )
+    
     
     def authenticate_user(self, username: str, password: str):
         user = self.get_user_by_username(username=username)

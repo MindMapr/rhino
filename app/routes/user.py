@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Header, Body
+from fastapi import APIRouter, Depends, HTTPException, status, Header, Body, Cookie
 from typing import Annotated
 from datetime import timedelta
 from fastapi.security import OAuth2PasswordRequestForm
@@ -60,7 +60,7 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
     return response
 
 @router.post("/refresh", response_model=auth.Token)
-async def refresh_for_new_access_token(refresh_token: str = Body(...)):
+async def refresh_for_new_access_token(refresh_token: str = Cookie(None)):
     return auth.refresh_for_new_access_token(refresh_token)
 
 @router.post("/logout")

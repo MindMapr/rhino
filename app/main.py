@@ -1,4 +1,5 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 
@@ -29,6 +30,14 @@ app.add_middleware(
     allow_methods = ["*"],
     allow_headers = ["*"]
 )
+
+# Used for sending the HTTPExecptions as a header so we can use it as error responses in frontend
+@app.exception_handler(HTTPException)
+async def custom_http_exception_handler(request: Request, exc: HTTPException):
+    response = await http_exception_handler(request, exc)
+    response.headers["Access-Control-Allow-Origin"] = origins
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    return response
 
 # include routers
 app.include_router(user_v1, prefix="/v1")

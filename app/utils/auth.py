@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Optional
 
 from jose import jwt, JWTError
-from fastapi import Depends, HTTPException, status, Header, Body
+from fastapi import Depends, HTTPException, status, Header, Body, Response
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -114,4 +114,5 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
 async def logout(token: Annotated[str, Depends(oauth2_scheme)]):
     blacklist.add(token)
     print(blacklist)
+    # TODO: delete cookie
     return {"msg": "Successfully logged out"}
