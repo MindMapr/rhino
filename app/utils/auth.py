@@ -1,14 +1,13 @@
 from datetime import datetime, timedelta, timezone
-from typing import Annotated, Optional
+from typing import Annotated
 
 from jose import jwt, JWTError
-from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordBearer
+from fastapi import Depends, HTTPException, status
 from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
 
-from ..database.mongodb import database as db
+from ..utils.oauth_cookies import OAuth2PasswordBearerWithCookie
 
 # Based on fastapi document for oauth:
 # https://fastapi.tiangolo.com/tutorial/security/oauth2-jwt/#handle-jwt-tokens
@@ -18,10 +17,10 @@ from ..database.mongodb import database as db
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
-ACCESS_TOKEN_EXPIRE_MINUTES = os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES"))
 
 # FIX: the prefix should not be hard-coded in here, should come from main
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/user/login")
+oauth2_scheme = OAuth2PasswordBearerWithCookie(tokenUrl="/v1/user/login")
 
 class Token(BaseModel):
     access_token: str
@@ -69,7 +68,7 @@ def refresh_for_new_access_token(refresh_token: str):
                 detail="Invalid refresh token"
             )
         
-        new_access_token = create_access_token(username, user_id, timedelta(minutes=int(ACCESS_TOKEN_EXPIRE_MINUTES)))
+        new_access_token = create_access_token(username, user_id, timedelta(seconds=ACCESS_TOKEN_EXPIRE_MINUTES))
         return {
             "access_token": new_access_token,
             "token_type": "bearer"
@@ -89,12 +88,12 @@ def refresh_for_new_access_token(refresh_token: str):
 blacklist = set()
 
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
-    token = request.cookies.get("access_token")
-    if token in blacklist:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has been revoked"
-        )
+    # currently not using blacklist
+    # if token in blacklist:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_401_UNAUTHORIZED,
+    #         detail="Token has been revoked"
+    #     )
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         username: str = payload.get("sub")
@@ -108,12 +107,13 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate user because of jwt}"
+            detail="Could not validate user"
         )
 
 # Currently unsure if this actually works - and if we should keep it
-async def logout(token: Annotated[str, Depends(oauth2_scheme)]):
-    blacklist.add(token)
-    print(blacklist)
-    # TODO: delete cookie
-    return {"msg": "Successfully logged out"}
+# Right now the logout endpoint deletes the cookies. Should we stick to that or blacklist?
+# async def logout(token: Annotated[str, Depends(oauth2_scheme)]):
+#     blacklist.add(token)
+#     print(blacklist)
+#     # TODO: delete cookie
+#     return {"msg": "Successfully logged out"}

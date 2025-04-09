@@ -50,35 +50,16 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate user"
         )
-    access_token = auth.create_access_token(user.username, user.user_id, timedelta(minutes=int(ACCESS_TOKEN_EXPIRE_MINUTES)))
+    access_token = auth.create_access_token(user.username, user.user_id, timedelta(seconds=ACCESS_TOKEN_EXPIRE_MINUTES)) # Have to be seconds, for some reason it makes it into hours when it uses minutes
     refresh_token = auth.create_refresh_token(user.username, user.user_id, timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
     response = JSONResponse(
         content={"access_token": access_token, "token_type": "bearer"}
     )
-    # # response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="none")
-    # response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="none")
-    # # TODO: Delete these before publishing, only used for testing purpose 
-    # print("Access: " + access_token)
-    # print("Refresh: " + refresh_token)
-    response = JSONResponse(content={"msg": "Logged in"})
-    
-    # Set secure httpOnly cookies
-    response.set_cookie(
-        key="access_token",
-        value=access_token,
-        httponly=True,
-        secure=True,  # Use true in production (ensure HTTPS)
-        samesite="lax",  # adjust as needed ("lax" or "strict")
-        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-    )
-    response.set_cookie(
-        key="refresh_token",
-        value=refresh_token,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
-    )
+    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax")
+    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax")
+    # TODO: Delete these before publishing, only used for testing purpose 
+    print("Access: " + access_token)
+    print("Refresh: " + refresh_token)
     return response
     
 
@@ -87,20 +68,19 @@ async def refresh_for_new_access_token(response: Response, refresh_token: str = 
     token_data = auth.refresh_for_new_access_token(refresh_token)
     new_access_token = token_data["access_token"]
     
-    # Set the access token cookie using same security policies as in the login endpoint
     response.set_cookie(
         key="access_token",
         value=new_access_token,
         httponly=True,
-        secure=True,         # Set to True in production (ensure HTTPS)
-        samesite="lax",      # or "strict", depending on your CSRF strategy
-        max_age=int(ACCESS_TOKEN_EXPIRE_MINUTES) * 60,
+        secure=True,        
+        samesite="lax",     
     )
     return token_data
 
 @router.post("/logout")
-async def logout_for_access_token(token: str, dependencies: user_dependency):
-    auth.logout(token)
+async def logout_for_access_token(dependencies: user_dependency, response: Response):
+    response.delete_cookie("access_token")
+    response.delete_cookie("refresh_token")
 
 
 @router.put("", description="Update user information")

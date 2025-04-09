@@ -31,6 +31,7 @@ app.add_middleware(
     allow_headers = ["*"]
 )
 
+
 # Used for sending the HTTPExecptions as a header so we can use it as error responses in frontend
 @app.exception_handler(HTTPException)
 async def custom_http_exception_handler(request: Request, exc: HTTPException):
