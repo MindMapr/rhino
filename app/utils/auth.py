@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated, Optional
 
 from jose import jwt, JWTError
-from fastapi import Depends, HTTPException, status, Header, Body, Response
+from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -89,6 +89,7 @@ def refresh_for_new_access_token(refresh_token: str):
 blacklist = set()
 
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
+    token = request.cookies.get("access_token")
     if token in blacklist:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

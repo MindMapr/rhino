@@ -35,7 +35,7 @@ app.add_middleware(
 @app.exception_handler(HTTPException)
 async def custom_http_exception_handler(request: Request, exc: HTTPException):
     response = await http_exception_handler(request, exc)
-    response.headers["Access-Control-Allow-Origin"] = origins
+    response.headers["Access-Control-Allow-Origin"] = "http://localhost:3000" # Ensure this matches frontend to avoid a CORS error
     response.headers["Access-Control-Allow-Credentials"] = "true"
     return response
 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Header, Body, Cookie
+from fastapi import APIRouter, Depends, HTTPException, status, Cookie, Response
 from typing import Annotated
 from datetime import timedelta
 from fastapi.security import OAuth2PasswordRequestForm
@@ -55,13 +55,48 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
     response = JSONResponse(
         content={"access_token": access_token, "token_type": "bearer"}
     )
-    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=True)
-    print("Refresh: " + refresh_token)
+    # # response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="none")
+    # response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="none")
+    # # TODO: Delete these before publishing, only used for testing purpose 
+    # print("Access: " + access_token)
+    # print("Refresh: " + refresh_token)
+    response = JSONResponse(content={"msg": "Logged in"})
+    
+    # Set secure httpOnly cookies
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=True,  # Use true in production (ensure HTTPS)
+        samesite="lax",  # adjust as needed ("lax" or "strict")
+        max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+    )
     return response
+    
 
 @router.post("/refresh", response_model=auth.Token)
-async def refresh_for_new_access_token(refresh_token: str = Cookie(None)):
-    return auth.refresh_for_new_access_token(refresh_token)
+async def refresh_for_new_access_token(response: Response, refresh_token: str = Cookie(None)):
+    token_data = auth.refresh_for_new_access_token(refresh_token)
+    new_access_token = token_data["access_token"]
+    
+    # Set the access token cookie using same security policies as in the login endpoint
+    response.set_cookie(
+        key="access_token",
+        value=new_access_token,
+        httponly=True,
+        secure=True,         # Set to True in production (ensure HTTPS)
+        samesite="lax",      # or "strict", depending on your CSRF strategy
+        max_age=int(ACCESS_TOKEN_EXPIRE_MINUTES) * 60,
+    )
+    return token_data
 
 @router.post("/logout")
 async def logout_for_access_token(token: str, dependencies: user_dependency):
