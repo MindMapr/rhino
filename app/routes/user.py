@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Cookie, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from typing import Annotated
 from datetime import timedelta
 from fastapi.security import OAuth2PasswordRequestForm
@@ -44,41 +44,30 @@ async def create_user(params: CreateUserRequest):
 
 @router.post("/login", response_model=auth.Token)
 async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+    # Ensure user exists in database
     user = list_routes.authenticate_user(username=form_data.username, password=form_data.password)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Could not validate user"
         )
-    access_token = auth.create_access_token(user.username, user.user_id, timedelta(seconds=ACCESS_TOKEN_EXPIRE_MINUTES)) # Have to be seconds, for some reason it makes it into hours when it uses minutes
+    # Create the tokens based on the logic from the auth-file
+    access_token = auth.create_access_token(user.username, user.user_id, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     refresh_token = auth.create_refresh_token(user.username, user.user_id, timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
     response = JSONResponse(
         content={"access_token": access_token, "token_type": "bearer"}
     )
+    # Secure should be set to true for prod
     response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax")
     response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax")
     # TODO: Delete these before publishing, only used for testing purpose 
     print("Access: " + access_token)
     print("Refresh: " + refresh_token)
     return response
-    
-
-@router.post("/refresh", response_model=auth.Token)
-async def refresh_for_new_access_token(response: Response, refresh_token: str = Cookie(None)):
-    token_data = auth.refresh_for_new_access_token(refresh_token)
-    new_access_token = token_data["access_token"]
-    
-    response.set_cookie(
-        key="access_token",
-        value=new_access_token,
-        httponly=True,
-        secure=True,        
-        samesite="lax",     
-    )
-    return token_data
 
 @router.post("/logout")
 async def logout_for_access_token(dependencies: user_dependency, response: Response):
+    # Ensures both cookies are deleted when the user logs out
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
 
@@ -92,3 +81,24 @@ async def update_user(user: UserUpdate, current_user: user_dependency):
 async def delete_user(current_user: user_dependency):
     user_id = current_user["_id"]
     return list_routes.delete_user(user_id)
+
+# This endpoint is only used on routes in fe that we do not have a backend point to
+@router.get("/protected")
+async def protected_route(dependecies: Annotated[dict, Depends(auth.get_current_user_with_refresh)], response: Response = None):
+    return {"msg": "success"}
+
+
+# Potentially not needed anymore
+# @router.post("/refresh", response_model=auth.Token)
+# async def refresh_for_new_access_token(response: Response, refresh_token: str = Cookie(None)):
+#     token_data = auth.refresh_for_new_access_token(refresh_token)
+#     new_access_token = token_data["access_token"]
+    
+#     response.set_cookie(
+#         key="access_token",
+#         value=new_access_token,
+#         httponly=True,
+#         secure=False,        
+#         samesite="lax",     
+#     )
+#     return token_data

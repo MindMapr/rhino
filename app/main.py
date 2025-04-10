@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
+from datetime import datetime, timezone
 
 # Routers
 from .routes.user import router as user_v1
@@ -31,6 +32,11 @@ app.add_middleware(
     allow_headers = ["*"]
 )
 
+# TODO: This is used for testing and should be deleted before prod.
+# It is used to check exp time on a decoded jwt token to confirm authentication behavior
+exp = 1744269527
+expiration_time = datetime.fromtimestamp(exp, timezone.utc)
+print(expiration_time)
 
 # Used for sending the HTTPExecptions as a header so we can use it as error responses in frontend
 @app.exception_handler(HTTPException)
