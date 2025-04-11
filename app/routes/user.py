@@ -38,8 +38,14 @@ async def get_user(current_user: user_dependency):
 
 @router.post("", status_code=201, description="Create a new user")
 async def create_user(params: CreateUserRequest):
+    try:
     # Convert user request into an instance of user
-    user = User(**params.model_dump())
+        user = User(**params.model_dump())
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Password must be at least 8 characters"
+        )
     return list_routes.create_user(user)
 
 @router.post("/login", response_model=auth.Token)
