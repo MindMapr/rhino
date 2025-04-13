@@ -1,3 +1,4 @@
+from datetime import datetime
 from fastapi import HTTPException, status
 from uuid import UUID
 from typing import List
@@ -51,6 +52,8 @@ class TimeFrameList():
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="End date cannot be before start date."
             )
+        print(time_frame)
+        
 
         _ = self.db.insert_one(time_frame.model_dump(by_alias=True))
 

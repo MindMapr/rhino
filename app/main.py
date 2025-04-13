@@ -1,6 +1,8 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import http_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pymongo import MongoClient
 from datetime import datetime, timezone
 
@@ -31,6 +33,20 @@ app.add_middleware(
     allow_methods = ["*"],
     allow_headers = ["*"]
 )
+
+# Had some issues with the errors from not being properly printed in backend, causing issues with troubleshooting. Found this exception handler. Since it is located in the main it handles all incoming excepts of type 422.
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = exc.errors()
+    for error in errors:
+        if 'input' in error and isinstance(error['input'], bytes):
+            error['input'] = error['input'].decode("utf-8")
+    print("Validation error:", exc.errors())  # For debugging/logging purposes
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors()},
+    )
+
 
 # TODO: This is used for testing and should be deleted before prod.
 # It is used to check exp time on a decoded jwt token to confirm authentication behavior

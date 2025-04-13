@@ -26,10 +26,11 @@ async def create_time_frame(params: CreateTimeFrame, current_user: user_dependen
         user_id = current_user["_id"],
         start_date=params.start_date,
         end_date=params.end_date,
-        work_time_frame_intervals=[params.work_intervals],
+        work_time_frame_intervals=params.work_intervals,
         include_weekend=params.include_weekend,
         created_at=datetime.now(timezone.utc)
-    )                            
+    )
+    print(time_frame)                    
     return list_routes.create_time_frame(time_frame)
 
 # Consider if it should be protected?
