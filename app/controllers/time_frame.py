@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from fastapi import HTTPException, status
 from uuid import UUID
 from typing import List
@@ -45,6 +45,28 @@ class TimeFrameList():
             "status": status.HTTP_200_OK,
             "data": [TimeFrame(**time_frame) for time_frame in result]
         }
+    
+    # Used to find the current active time frame that the user has
+    def get_active_time_frame(self, user_id: str):
+        result = self.db.find_one({
+            "user_id": UUID(user_id),
+            # $gte is a mongodb operator that works for comparision. It only find documents that are greater than or equal to the given value. In this case it only find the current active time frame document.
+            "end_date": {"$gte": datetime.today()}
+        })
+        
+        if result:
+            return {
+                "status": status.HTTP_200_OK,
+                "data": TimeFrame(**result)
+            }
+        # We should probably have a check if there is more than two and then discuss the logic if that happens
+        else:
+            raise HTTPException (
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=not_found_404 
+            )
+
+
         
     def create_time_frame(self, time_frame: TimeFrame):
         if time_frame.start_date > time_frame.end_date:

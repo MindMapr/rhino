@@ -46,6 +46,10 @@ async def get_single_time_frame(time_frame_id: str, current_user: user_dependenc
 async def get_all_user_specific_time_frames(current_user: user_dependency):
     return list_routes.get_all_user_specific_time_frames(current_user["_id"])
 
+@router.get("/find_active_time_frame", description="Find the current active time frame belonging to the user")
+async def get_active_time_frame(current_user: user_dependency):
+    return list_routes.get_active_time_frame(current_user["_id"])
+
 @router.put("/", description="Update a specific time_frame")
 async def update_time_frame(time_frame_id: str, time_frame: UpdateTimeFrame, current_user: user_dependency):
     return list_routes.update_time_frame(time_frame_id, time_frame)
