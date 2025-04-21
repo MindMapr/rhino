@@ -19,6 +19,9 @@ class UserList:
 
     # Find all users in the collection and return them as a list
     def get_all_users(self) -> List[User]:
+        """
+            Get all users in database, returns a list
+        """
         result = self.db.find()
         number_of_users = self.db.count_documents({})
         return {
@@ -28,6 +31,9 @@ class UserList:
         }
 
     def get_user(self, user_id: str):
+        """
+            Get a single user based on their id
+        """
         result = self.db.find_one({"_id": UUID(user_id)})
         if result:
             return {
@@ -42,6 +48,9 @@ class UserList:
     
     # Used in auth for token validation
     def get_user_by_username(self, username: str):
+        """
+            Get a single user based on their username
+        """
         result = self.db.find_one({"username": username})
         if result:
             return User(**result)
@@ -53,6 +62,9 @@ class UserList:
     
     
     def authenticate_user(self, username: str, password: str):
+        """
+            Takes the users usernamer and passowrd, verify the hased password and returns the user
+        """
         user = self.get_user_by_username(username=username)
         if not user:
             raise HTTPException(
@@ -68,6 +80,9 @@ class UserList:
         return user
 
     def create_user(self, user: User):
+        """
+            Hashes the users password and adds them to the database
+        """
         # check if username or email is already taken
         self.check_username_and_email(user)
 
@@ -78,6 +93,10 @@ class UserList:
         _ = self.db.insert_one(user.model_dump(by_alias=True))
 
     def update_user(self, user_id: str, user: UserUpdate):
+        """
+            Can update the username, email or password of the user. 
+            If the user updates their password it will be hashed before storing it.
+        """
         self.check_username_and_email(user)
 
         update_field = user.model_dump(exclude_unset=True)
@@ -101,8 +120,11 @@ class UserList:
             )
 
 
-    # Delete user from database - needs protected routing to avoid issues
+    # Delete user from database
     def delete_user(self, user_id: str):
+        """
+            Deletes a user from the database based on their id
+        """
         result = self.db.delete_one({"_id": UUID(user_id)})
         if result.deleted_count:
             return {
@@ -116,6 +138,9 @@ class UserList:
             )
 
     def check_username_and_email(self, user):
+        """
+            Checks if username or email is already used in the database. Returns 400 if they are taken.
+        """
         if self.db.find_one({"username": user.username}):
             raise HTTPException(
                 status_code = status.HTTP_400_BAD_REQUEST,

@@ -9,12 +9,13 @@ from ..utils.auth import get_current_user
 
 # Setup collection
 collection = database.task
+time_frame_collection = database.time_frame
 
 # Router
 router = APIRouter(prefix="/task", tags=["task"])
 
 # Controllers
-list_routes = TaskList(collection)
+list_routes = TaskList(collection, time_frame_collection)
 
 # Dependencies
 user_dependency = Annotated[dict, Depends(get_current_user)]
@@ -29,7 +30,7 @@ async def create_task(time_frame_id: str, params: CreateTask, current_user: user
         start=params.start,
         end=(params.start + timedelta(hours=params.duration)), # We need to figure out how duration is handled in frontend
         category=params.category,
-        description=params.description
+        description=params.description or ""
     )
 
     return list_routes.create_task(task)

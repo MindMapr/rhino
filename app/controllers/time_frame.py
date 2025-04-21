@@ -14,6 +14,9 @@ class TimeFrameList():
 
     # Get all time frames in database
     def get_all_time_frames(self) -> List[TimeFrame]:
+        """
+            Get all time frames in the database and returns them as a list.
+        """
         result = self.db.find()
         number_of_time_frames = self.db.count_documents({})
 
@@ -25,6 +28,9 @@ class TimeFrameList():
     
     # Get a specific time frame from the database
     def get_single_time_frame(self, time_frame_id: str):
+        """
+            Get a single time frame based on their id
+        """
         result = self.db.find_one({"_id": UUID(time_frame_id)})
         if result:
             return {
@@ -39,6 +45,9 @@ class TimeFrameList():
         
     # Get all time frames for a specific user
     def get_all_user_specific_time_frames(self, user_id: str) -> List[TimeFrame]:
+        """
+            Given a users id, it will find all their time frames and return them as a list.
+        """
         result = self.db.find({"user_id": UUID(user_id)})
 
         return {
@@ -48,6 +57,9 @@ class TimeFrameList():
     
     # Used to find the current active time frame that the user has
     def get_active_time_frame(self, user_id: str):
+        """
+            Given a users id it will return the current active time frame for this user. There should only be one active time frame per user.
+        """
         result = self.db.find_one({
             "user_id": UUID(user_id),
             # $gte is a mongodb operator that works for comparision. It only find documents that are greater than or equal to the given value. In this case it only find the current active time frame document.
@@ -69,6 +81,9 @@ class TimeFrameList():
 
         
     def create_time_frame(self, time_frame: TimeFrame):
+        """
+            Creates a new time frame and adds it to the database.
+        """
         if time_frame.start_date > time_frame.end_date:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -80,6 +95,9 @@ class TimeFrameList():
         _ = self.db.insert_one(time_frame.model_dump(by_alias=True))
 
     def update_time_frame(self, time_frame_id: str, time_frame: UpdateTimeFrame):
+        """
+            Update the different fields in a time frame
+        """
         update_field = time_frame.model_dump(exclude_unset=True)
 
         result = self.db.update_one(
@@ -98,6 +116,9 @@ class TimeFrameList():
             )
 
     def delete_time_frame(self, time_frame_id: str):
+        """
+            Given the id it will delete the time frame from the database.
+        """
         # should we do a check if the time_frame they are deleting has a match on their own id?
         result = self.db.delete_one({"_id": UUID(time_frame_id)})
         if result.deleted_count:
