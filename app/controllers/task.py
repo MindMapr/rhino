@@ -18,31 +18,33 @@ class TaskList():
 
     def create_task(self, task: Task):
         """
-            Creates a new task and uses the scheduler to place the correct start and end time of each task based on work windows and priority. When a new task is created this is also in charge of potential rescheduels of other tasks in same time frame.
+            Creates a new task and uses the scheduler to place the correct start and end time
+            of each task based on work windows and priority. When a new task is created this
+            is also in charge of potential rescheduels of other tasks in same time frame.
         """
         _ = self.db.insert_one(task.model_dump(by_alias=True))
-        
+
         # Find all tasks belonging to the given time frame
         response = self.find_all_time_frame_tasks(task.time_frame_id)
         # Since find_all_time_frame_tasks return both status and data, we specify we are only interested in data here.
         tasks: List[Task] = response["data"]
-        
+
         time_frame_data = self.time_frame_collection.find_one(task.time_frame_id)
         # Validate it as a pydantic model instance
         time_frame = TimeFrame.model_validate(time_frame_data)
-        
+
         available_work_time = generate_available_work_window_slots(time_frame)
         schedule = schedule_tasks(tasks, available_work_time)
-        
+
         # Loops through the tasks and update their work times if needed
         for scheduling_tasks in schedule:
             self.db.update_one({"_id": scheduling_tasks.task_id}, {"$set": {"start": scheduling_tasks.start, "end": scheduling_tasks.end}})
-        
+
         # Only return the newest created task, not all of them
         return next(new_task for new_task in schedule if new_task.task_id == task.task_id)
-        
-    
-    
+
+
+
     def find_all_time_frame_tasks(self, time_frame_id: Union[str, UUID]) -> dict:
         """
         Returns all tasks for a given time_frame_id, or 404 if none exist.
@@ -70,10 +72,10 @@ class TaskList():
         # Turn documents into a task model
         tasks = [Task.model_validate(document) for document in docs]
         return {
-            "status": status.HTTP_200_OK, 
+            "status": status.HTTP_200_OK,
             "data": tasks
         }
-        
+
     def find_specific_task(self, task_id: str):
         """
             Find a specific task based on the provided id
@@ -87,7 +89,7 @@ class TaskList():
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="No task found"
             )
-        
+
     # TODO: We need to fix the update tasks and creation of a new one. Currently, it does work, but if a user suddenly has a lot of tasks and we call all of them individual to update them, it can potentially create bottlenecks.
     def update_task(self, task_id: str, task: UpdateTask) -> Task:
         try:
@@ -98,10 +100,10 @@ class TaskList():
                 detail="Invalid task id format"
             )
         # Find the existing task to get the id from the time frame
-        existing = self.find_specific_task(task_id)        
-        
+        existing = self.find_specific_task(task_id)
+
         update_field = task.model_dump(exclude_unset=True)
-        
+
         result = self.db.update_one(
                 {"_id": UUID(task_id)},
                 {"$set": update_field}
@@ -130,7 +132,7 @@ class TaskList():
             )
 
         # 10) Return the one we just updated
-        return next(t for t in scheduled if t.task_id == existing.task_id)    
+        return next(t for t in scheduled if t.task_id == existing.task_id)
 
     def delete_task(self, task_id: str):
         result = self.db.delete_one({"_id": UUID(task_id)})
