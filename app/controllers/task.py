@@ -20,7 +20,7 @@ class TaskList():
         """
             Creates a new task and uses the scheduler to place the correct start and end time
             of each task based on work windows and priority. When a new task is created this
-            is also in charge of potential rescheduels of other tasks in same time frame.
+            is also in charge of potential rescheduling of other tasks in same time frame.
         """
         _ = self.db.insert_one(task.model_dump(by_alias=True))
 
