@@ -43,10 +43,10 @@ async def find_all_time_frame_tasks(time_frame_id: str, current_user: user_depen
 async def find_specific_task(task_id: str, current_user: user_dependency):
     return list_routes.find_specific_task(task_id)
 
-@router.put("/{id}", description="Update a task")
+@router.put("/{task_id}", description="Update a task")
 async def update_task(task_id: str, task: UpdateTask, current_user: user_dependency):
     return list_routes.update_task(task_id, task)
 
-@router.delete("/{}", description="Delete the task")
+@router.delete("/{id}", description="Delete the task")
 async def delete_task(task_id: str, current_user: user_dependency):
     return list_routes.delete_task(task_id)

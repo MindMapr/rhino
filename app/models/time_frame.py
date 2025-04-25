@@ -15,8 +15,9 @@ class WorkTimeIntervals(BaseModel):
         if model.end < model.start:
             raise ValueError("End time cannot be before your start time.")
         return model
-    
-    # Important that mode is set to before to confirm input. Used to ensure the database receives the correct input when adding a WorkTimeInterval in frontend, as it is send as hh:mm.
+
+    # Important that mode is set to before to confirm input. Used to ensure the database
+    # receives the correct input when adding a WorkTimeInterval in frontend, as it is send as hh:mm.
     @field_validator("start", "end", mode="before")
     def add_date_if_only_time(cls, value):
         # Check if value is a string without date/only with time
@@ -32,7 +33,7 @@ class WorkTimeIntervals(BaseModel):
 
 
 class TimeFrame(BaseModel):
-    time_frame_id: UUID = Field(default_factory=uuid4, alias="_id") 
+    time_frame_id: UUID = Field(default_factory=uuid4, alias="_id")
     user_id: UUID # id of the user the time frame belongs to
     start_date: datetime = Field(..., description="The date where their project begins")
     end_date: datetime = Field(..., description="The day where they expect their project to end")
