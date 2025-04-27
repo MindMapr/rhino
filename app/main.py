@@ -50,7 +50,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 # TODO: This is used for testing and should be deleted before prod.
 # It is used to check exp time on a decoded jwt token to confirm authentication behavior
-exp = 1745004606
+exp = 1745620574
 expiration_time = datetime.fromtimestamp(exp, timezone.utc)
 print(expiration_time)
 

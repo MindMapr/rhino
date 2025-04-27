@@ -26,9 +26,10 @@ async def create_task(time_frame_id: str, params: CreateTask, current_user: user
         time_frame_id=time_frame_id,
         title=params.title,
         priority=params.priority,
-        duration=params.duration,
+        self_estimated_duration=params.self_estimated_duration,
+        tracked_duration=0,
         start=params.start,
-        end=(params.start + timedelta(hours=params.duration)), # We need to figure out how duration is handled in frontend
+        end=(params.start + timedelta(hours=params.self_estimated_duration)), # We need to figure out how duration is handled in frontend
         category=params.category,
         description=params.description or ""
     )

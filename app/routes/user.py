@@ -89,10 +89,9 @@ async def delete_user(current_user: user_dependency):
     return list_routes.delete_user(user_id)
 
 # This endpoint is only used on routes in fe that we do not have a backend point to
-@router.get("/protected")
+@router.post("/protected")
 async def protected_route(dependecies: Annotated[dict, Depends(auth.get_current_user_with_refresh)], response: Response = None):
     return {"msg": "success"}
-
 
 # Potentially not needed anymore
 # @router.post("/refresh", response_model=auth.Token)

@@ -18,8 +18,9 @@ class Task(BaseModel):
     task_id: UUID = Field(default_factory=uuid4, alias="_id")
     time_frame_id: UUID = Field(..., description="ID for the time_frame the task belongs to")
     title: str = Field(..., description="The title of the task")
-    priority: int = Field(..., description="The priority of the task that needs to be completed") # maybe do a check between 1-5?
-    duration: float = Field(..., description="How long the task is estimated to take")
+    priority: int = Field(..., description="The priority of the task that needs to be completed")
+    self_estimated_duration: float = Field(..., description="How long the user estimates the task to take")
+    tracked_duration: Optional[float] = Field(..., description="The actual duration of the task")
     start: datetime = Field(..., description="The expected start of the task")
     end: datetime = Field(..., description="The expected end of task")
     category: TaskCategory = Field(..., description="The category type of the task")
@@ -29,7 +30,8 @@ class Task(BaseModel):
 class UpdateTask(BaseModel):
     title: Optional[str] = None
     priority: Optional[int] = None
-    duration: Optional[float] = None
+    self_estimated_duration: Optional[float] = None
+    tracked_duration: Optional[float] = None
     start: Optional[datetime] = None
     category: Optional[TaskCategory] = None
     description: Optional[str] = None 
@@ -38,7 +40,7 @@ class UpdateTask(BaseModel):
 class CreateTask(BaseModel):
     title: str
     priority: int
-    duration: float
+    self_estimated_duration: float
     start: datetime
     category: TaskCategory
     description: Optional[str] = None
