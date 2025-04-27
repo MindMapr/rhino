@@ -10,12 +10,13 @@ from ..utils.auth import get_current_user
 # Setup collection
 collection = database.task
 time_frame_collection = database.time_frame
+user_collection = database.user
 
 # Router
 router = APIRouter(prefix="/task", tags=["task"])
 
 # Controllers
-list_routes = TaskList(collection, time_frame_collection)
+list_routes = TaskList(collection, time_frame_collection, user_collection)
 
 # Dependencies
 user_dependency = Annotated[dict, Depends(get_current_user)]

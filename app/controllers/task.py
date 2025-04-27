@@ -94,6 +94,9 @@ class TaskList():
 
     # TODO: We need to fix the update tasks and creation of a new one. Currently, it does work, but if a user suddenly has a lot of tasks and we call all of them individual to update them, it can potentially create bottlenecks.
     def update_task(self, task_id: str, task: UpdateTask) -> Task:
+        """
+            Updates a task. If the field contains completed, priority or duration it will also update all other tasks for that time frame to ensure they have the correct time allocated.
+        """
         # validate and pull existing task
         try:
             task_uuid = UUID(task_id)
@@ -174,21 +177,25 @@ class TaskList():
 
     ### Helpers for updating to avoid a really bloated long update function ###
     
-    def carve_free_windows(self, 
+    # Used for finding out how much time is left after finishing. 
+    def remaining_work_windows(self, 
         windows: List[Tuple[datetime, datetime]],
         finished_utc: datetime
     ) -> List[Tuple[datetime, datetime]]:
+        # Free is the leftover time that might still be if the user finish early.
         free: List[Tuple[datetime, datetime]] = []
         for start, end in windows:
+            # Skip the work window if ends before the task is finished
             if end <= finished_utc:
                 continue
+            # If it finish during the work window, only keep the free part of the work window.
             if start < finished_utc < end:
                 free.append((finished_utc, end))
             else:
                 free.append((start, end))
         return free
 
-    # 2) Reschedule just the downstream tasks
+    # Reschedule just the downstream tasks
     def reschedule_downstream_tasks(
         self,
         time_frame_id: UUID,
@@ -202,21 +209,22 @@ class TaskList():
             if task.priority > completed_task.priority and not task.completed
         ]
 
-        free_windows = self.carve_free_windows(original_window, completed_task.end)
+        free_windows = self.remaining_work_windows(original_window, completed_task.end)
         scheduled = schedule_tasks(to_run, free_windows)
-        for t in scheduled:
-            self.db.update_one({"_id": t.task_id}, {"$set": {"start": t.start, "end": t.end}})
+        for task in scheduled:
+            self.db.update_one({"_id": task.task_id}, {"$set": {"start": task.start, "end": task.end}})
 
-    # 3) Full reschedule of *all* tasks
+    # Full reschedule of all tasks in time frame
     def reschedule_all_tasks(
         self,
         all_tasks: List[Task],
-        orig_windows: List[Tuple[datetime, datetime]],
+        original_windows: List[Tuple[datetime, datetime]],
     ) -> None:
-        scheduled = schedule_tasks(all_tasks, orig_windows)
-        for t in scheduled:
-            self.db.update_one({"_id": t.task_id}, {"$set": {"start": t.start, "end": t.end}})
+        scheduled = schedule_tasks(all_tasks, original_windows)
+        for task in scheduled:
+            self.db.update_one({"_id": task.task_id}, {"$set": {"start": task.start, "end": task.end}})
             
+    # tnhe logic of how the task is completed. Here we ensure that the tracked_duration is updated
     def handle_completion(
         self,
         task_uuid: UUID,
@@ -234,8 +242,9 @@ class TaskList():
             {"_id": task_uuid},
             {"$set": {"tracked_duration": duration}}
         )
+        
         return finished_utc
 
-    # 5) Reset when un-completing
+    # Reset when un-completing
     def handle_uncompletion(self, task_uuid: UUID) -> None:
         self.db.update_one({"_id": task_uuid}, {"$set": {"tracked_duration": 0}})

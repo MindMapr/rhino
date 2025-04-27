@@ -49,7 +49,7 @@ async def create_user(params: CreateUserRequest):
     return list_routes.create_user(user)
 
 @router.post("/login", response_model=auth.Token)
-async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm, Depends()], response: Response):
     # Ensure user exists in database
     user = list_routes.authenticate_user(username=form_data.username, password=form_data.password)
     if not user:
@@ -60,16 +60,13 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
     # Create the tokens based on the logic from the auth-file
     access_token = auth.create_access_token(user.username, user.user_id, timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     refresh_token = auth.create_refresh_token(user.username, user.user_id, timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS))
-    response = JSONResponse(
-        content={"access_token": access_token, "token_type": "bearer"}
-    )
+    # response = JSONResponse(
+    #     content={"access_token": access_token, "token_type": "bearer"}
+    # )
     # Secure should be set to true for prod
     response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax")
     response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax")
-    # TODO: Delete these before publishing, only used for testing purpose 
-    print("Access: " + access_token)
-    print("Refresh: " + refresh_token)
-    return response
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/logout")
 async def logout_for_access_token(dependencies: user_dependency, response: Response):
@@ -88,22 +85,7 @@ async def delete_user(current_user: user_dependency):
     user_id = current_user["_id"]
     return list_routes.delete_user(user_id)
 
-# This endpoint is only used on routes in fe that we do not have a backend point to
+# This endpoint is only used on routes in frontend that we do not have a backend point to
 @router.post("/protected")
 async def protected_route(dependecies: Annotated[dict, Depends(auth.get_current_user_with_refresh)], response: Response = None):
     return {"msg": "success"}
-
-# Potentially not needed anymore
-# @router.post("/refresh", response_model=auth.Token)
-# async def refresh_for_new_access_token(response: Response, refresh_token: str = Cookie(None)):
-#     token_data = auth.refresh_for_new_access_token(refresh_token)
-#     new_access_token = token_data["access_token"]
-    
-#     response.set_cookie(
-#         key="access_token",
-#         value=new_access_token,
-#         httponly=True,
-#         secure=False,        
-#         samesite="lax",     
-#     )
-#     return token_data
