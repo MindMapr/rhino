@@ -1,8 +1,18 @@
 from pydantic import BaseModel, Field, field_validator, EmailStr
-from typing import Optional
+from typing import Dict, List, Optional
 from uuid import UUID, uuid4
 from datetime import datetime
+
+from app.models.task import TaskCategory
 # from ..utils.parse_objectId import PydanticObjectId
+
+class CategoryStats(BaseModel):
+    history: List[float] = Field(
+        default_factory=list,
+        description="List of pct-error values for each completed task"
+    )
+    # average percent over/under estimate
+    avg_pct_error: float = 0.0   
 
 # User schema
 class User(BaseModel):
@@ -11,6 +21,9 @@ class User(BaseModel):
     email: EmailStr
     password: str
     created_at: datetime = Field(default_factory = lambda: datetime.now())
+    estimation_average_for_category: Dict[str, CategoryStats] = Field(default_factory=lambda: {
+            category: CategoryStats() for category in TaskCategory
+        })
     # SUGGESTION: Maybe a personal enum for task they create, that we do not have?
     # TODO: add profile image?
 

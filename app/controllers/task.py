@@ -4,6 +4,8 @@ from fastapi import HTTPException, status
 from uuid import UUID
 from typing import List, Tuple, Union
 from pymongo import UpdateOne
+
+from app.controllers.user import UserList
 from ..utils.scheduler import calculate_tracked_duration, generate_available_work_window_slots, schedule_tasks
 
 from ..models.task import Task, UpdateTask
@@ -11,12 +13,14 @@ from ..models.time_frame import TimeFrame
 
 # Constants
 not_found_404 = "Task not found"
+COPENHAGEN = ZoneInfo("Europe/Copenhagen")
 
 # Helpers
 class TaskList():
-    def __init__(self, db, time_frame_collection):
+    def __init__(self, db, time_frame_collection, user_collection):
         self.db = db
         self.time_frame_collection = time_frame_collection
+        self.user_collection = user_collection
 
     def create_task(self, task: Task):
         """
@@ -144,15 +148,33 @@ class TaskList():
 
         # Check to update if complete is being updated to false and then reschedule tasks back to the original estimate
         if "completed" in update_field and not completed and existing.completed:
-                self.handle_uncompletion(task_uuid)
+                    # 1) undo completion & zero tracked_duration
+            self.handle_uncompletion(task_uuid, existing, time_frame)
 
-                # Find the tasks belonging to that time frame and update their times to match the work windows
-                all_tasks = self.find_all_time_frame_tasks(existing.time_frame_id)["data"]
-                windows   = generate_available_work_window_slots(time_frame)
+            # 2) reload all tasks, split by completion
+            all_tasks = self.find_all_time_frame_tasks(existing.time_frame_id)["data"]
+            completed = [t for t in all_tasks if t.completed]
+            upcoming  = [t for t in all_tasks if not t.completed]
 
-                self.reschedule_all_tasks(all_tasks, windows)
-                return self.find_specific_task(task_id)
+            # 3) regenerate full work windows
+            windows = generate_available_work_window_slots(time_frame)
 
+            # 4) prune windows by each completed task’s actual finish
+            for c in sorted(completed, key=lambda t: t.priority):
+                actual_finish = c.start + timedelta(hours=c.tracked_duration)
+                windows = self.remaining_work_windows(windows, actual_finish)
+
+            # 5) schedule only the upcoming tasks into the pruned windows
+            scheduled = schedule_tasks(upcoming, windows)
+
+            # 6) write back their new start/end
+            for t in scheduled:
+                self.db.update_one(
+                    {"_id": t.task_id},
+                    {"$set": {"start": t.start, "end": t.end}}
+                )
+
+            return self.find_specific_task(task_id)
         # Check if priority of duration is updated on one of the tasks and then update all time frame tasks accordingly
         if priority_new != existing.priority or new_estimate != existing.self_estimated_duration:
             self.reschedule_all_tasks(all_tasks, original_windows)
@@ -163,19 +185,69 @@ class TaskList():
         return self.find_specific_task(task_id)
 
     def delete_task(self, task_id: str):
-        result = self.db.delete_one({"_id": UUID(task_id)})
-        if result.deleted_count:
-            return {
-                "status": status.HTTP_200_OK,
-                "data": {"task": str(result)}
-            }
-        else:
-            raise HTTPException(
-                status_code = status.HTTP_404_NOT_FOUND,
-                detail = not_found_404
+        # 0) validate & load the task-to-delete so we know its time_frame_id & priority
+        try:
+            uuid = UUID(task_id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail="Invalid task id format")
+        to_delete = self.find_specific_task(task_id)
+
+        # 1) delete it
+        result = self.db.delete_one({"_id": uuid})
+        if not result.deleted_count:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                                detail="Task not found")
+
+        # 2) decrement priority of everything that was below it
+        self.db.update_many(
+            {
+                "time_frame_id": to_delete.time_frame_id,
+                "priority": {"$gt": to_delete.priority}
+            },
+            {"$inc": {"priority": -1}}
+        )
+
+        # 3) fetch TimeFrame and remaining tasks
+        tf_doc = self.time_frame_collection.find_one({"_id": to_delete.time_frame_id})
+        time_frame = TimeFrame.model_validate(tf_doc)
+
+        all_tasks = self.find_all_time_frame_tasks(to_delete.time_frame_id)["data"]
+
+        # 4) split into completed vs upcoming
+        completed = [t for t in all_tasks if t.completed]
+        upcoming  = [t for t in all_tasks if not t.completed]
+
+        # 5) build your COPENHAGEN‐naïve work windows
+        windows = generate_available_work_window_slots(time_frame)
+
+        # 6) *shrink* those windows to start *after* each completed task’s *actual* finish
+        #    (we compute actual finish = start + tracked_duration)
+        #    you already have a helper for this in your class:
+        for c in sorted(completed, key=lambda t: t.priority):
+            actual_finish = c.start + timedelta(hours=c.tracked_duration)
+            windows = self.remaining_work_windows(windows, actual_finish)
+
+        # 7) now pack *only* the upcoming tasks into the *remaining* windows
+        scheduled_upcoming = schedule_tasks(upcoming, windows)
+
+        # 8) write back start/end for those upcoming tasks
+        for t in scheduled_upcoming:
+            utc_start = t.start.astimezone(timezone.utc)
+            utc_end   = t.end.astimezone(timezone.utc)
+
+            # convert into CEST and strip tzinfo so Mongo stores the correct local clock
+            local_start = utc_start.astimezone(COPENHAGEN).replace(tzinfo=None)
+            local_end   = utc_end.astimezone(COPENHAGEN).replace(tzinfo=None)
+
+            self.db.update_one(
+                {"_id": t.task_id},
+                {"$set": {"start": local_start, "end": local_end}}
             )
 
-    ### Helpers for updating to avoid a really bloated long update function ###
+        return {"status": status.HTTP_200_OK, "data": {"deleted_task_id": task_id}}
+
+    ### Helpers for updating to avoid a really bloated update function ###
     
     # Used for finding out how much time is left after finishing. 
     def remaining_work_windows(self, 
@@ -209,10 +281,28 @@ class TaskList():
             if task.priority > completed_task.priority and not task.completed
         ]
 
-        free_windows = self.remaining_work_windows(original_window, completed_task.end)
-        scheduled = schedule_tasks(to_run, free_windows)
+        # 1) convert our original (UTC‐aware) work‐windows into CEST‐aware windows
+        cet_windows = [
+            (w_start.astimezone(COPENHAGEN), w_end.astimezone(COPENHAGEN))
+            for w_start, w_end in original_window
+        ]
+        # 2) likewise convert our completion time to CEST
+        completed_cet = completed_task.end.astimezone(COPENHAGEN)
+
+        # 3) carve out free‐windows *in CEST*
+        free_windows_cet = self.remaining_work_windows(cet_windows, completed_cet)
+
+        # 4) schedule everything in local time…
+        scheduled = schedule_tasks(to_run, free_windows_cet)
+
+        # 5) …and at the last moment strip tzinfo *only* once, writing back naive CEST
         for task in scheduled:
-            self.db.update_one({"_id": task.task_id}, {"$set": {"start": task.start, "end": task.end}})
+            naive_start = task.start.replace(tzinfo=None)
+            naive_end   = task.end.replace(tzinfo=None)
+            self.db.update_one(
+                {"_id": task.task_id},
+                {"$set": {"start": naive_start, "end": naive_end}}
+            )
 
     # Full reschedule of all tasks in time frame
     def reschedule_all_tasks(
@@ -225,26 +315,48 @@ class TaskList():
             self.db.update_one({"_id": task.task_id}, {"$set": {"start": task.start, "end": task.end}})
             
     # tnhe logic of how the task is completed. Here we ensure that the tracked_duration is updated
-    def handle_completion(
-        self,
-        task_uuid: UUID,
-        existing: Task,
-        time_frame: TimeFrame
-    ) -> datetime:
+    def handle_completion(self, task_uuid: UUID, existing: Task, time_frame: TimeFrame) -> datetime:
         finished_local = datetime.now(tz=ZoneInfo("Europe/Copenhagen"))
         finished_utc   = finished_local.astimezone(timezone.utc)
-        duration = calculate_tracked_duration(
+        duration = round(calculate_tracked_duration(
             existing.start,
-            finished_utc + timedelta(hours=2), # Sorry, I am tired and I can only get it to work by hard coding it
+            finished_utc, # Sorry, I am tired and I can only get it to work by hard coding it
             time_frame.work_time_frame_intervals,
-        )
+        ), 2)
         self.db.update_one(
             {"_id": task_uuid},
             {"$set": {"tracked_duration": duration}}
         )
         
+        # Ensure the user model is updated as well
+        user_id = time_frame.user_id
+        pct_error = (duration - existing.self_estimated_duration) / existing.self_estimated_duration * 100
+        user_controller = UserList(self.user_collection)
+        user_controller.update_user_estimation_average(
+            user_id,
+            existing.category,
+            pct_error
+        )
+            
         return finished_utc
 
     # Reset when un-completing
-    def handle_uncompletion(self, task_uuid: UUID) -> None:
-        self.db.update_one({"_id": task_uuid}, {"$set": {"tracked_duration": 0}})
+    def handle_uncompletion(self, task_uuid: UUID, existing: Task, time_frame: TimeFrame) -> None:
+        # Grab the old pct_error 
+        old_pct = round((existing.tracked_duration - existing.self_estimated_duration) / existing.self_estimated_duration * 100)
+
+        # Reset that task’s tracked_duration
+        self.db.update_one(
+            {"_id": task_uuid},
+            {"$set": {"tracked_duration": 0}}
+        )
+
+        # Ensure the average and history is removed from the users model
+        user_controller = UserList(self.user_collection)
+        user_controller.uncomplete_user_estimation_average(
+            time_frame.user_id,
+            existing.category,
+            old_pct,
+        )
+            
+        

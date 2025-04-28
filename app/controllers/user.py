@@ -3,6 +3,10 @@ from fastapi import HTTPException, status
 from typing import List
 from uuid import UUID
 
+from pymongo import ReturnDocument
+
+from app.models.task import TaskCategory
+
 # Utils
 from ..utils.hasher import Hasher
 
@@ -153,3 +157,80 @@ class UserList:
                 status_code = status.HTTP_400_BAD_REQUEST,
                 detail = "Email already taken"
             )
+            
+    # Insert the history of estimations and calculate the average of their estimations 
+    # used for help in regards to estimation guesses.
+    def update_user_estimation_average(
+        self,
+        user_id: UUID,
+        category: TaskCategory,
+        pct_error: float
+    ) -> None:
+        key = category.value
+
+        self.db.find_one_and_update(
+            {"_id": user_id},
+            [
+                # push the new pct_error onto the history array for research purpose
+                {"$set": {
+                    f"estimation_average_for_category.{key}.history": {
+                            "$concatArrays": [
+                                {"$ifNull": [f"$estimation_average_for_category.{key}.history", []]},
+                                [ { "$round": [pct_error, 0] } ]
+                        ]
+                    }
+                }},
+                # recompute avg_pct_error based on the history array
+                {"$set": {
+                    f"estimation_average_for_category.{key}.avg_pct_error": {
+                        "$round": [
+                            { "$avg": f"$estimation_average_for_category.{key}.history" },
+                            0
+                        ]
+                    }
+                }}
+            ],
+            return_document=ReturnDocument.AFTER
+        )
+        
+
+    def uncomplete_user_estimation_average(
+        self,
+        user_id: UUID,
+        category: TaskCategory,
+        pct_error: float
+    ) -> None:
+        """
+        Remove the given pct_error from performance.<category>.history
+        and recompute avg_pct_error (rounded to 0 decimals).
+        """
+        key = category.value  # e.g. "reading"
+
+        self.db.find_one_and_update(
+            {"_id": user_id},
+            [
+                # Stage 1: filter out any entry equal to pct_error
+                {"$set": {
+                    f"estimation_average_for_category.{key}.history": {
+                        "$filter": {
+                            "input": f"$estimation_average_for_category.{key}.history",
+                            "as": "e",
+                            "cond": {"$ne": ["$$e", pct_error]}
+                        }
+                    }
+                }},
+                # Stage 2: recompute & round the average (or zero if empty)
+                {"$set": {
+                    f"estimation_average_for_category.{key}.avg_pct_error": {
+                        "$round": [
+                            {"$ifNull": [
+                                {"$avg": f"$estimation_average_for_category.{key}.history"},
+                                0
+                            ]},
+                            0
+                        ]
+                    }
+                }}
+            ],
+            return_document=ReturnDocument.AFTER
+        )
