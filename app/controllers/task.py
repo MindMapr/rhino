@@ -13,7 +13,6 @@ from ..models.time_frame import TimeFrame
 
 # Constants
 not_found_404 = "Task not found"
-COPENHAGEN = ZoneInfo("Europe/Copenhagen")
 
 # Helpers
 class TaskList():
@@ -39,15 +38,30 @@ class TaskList():
         # Validate it as a pydantic model instance
         time_frame = TimeFrame.model_validate(time_frame_data)
 
-        available_work_time = generate_available_work_window_slots(time_frame)
-        schedule = schedule_tasks(tasks, available_work_time)
+        # Split out completed vs upcoming
+        completed = [t for t in tasks if t.completed]
+        upcoming  = [t for t in tasks if not t.completed]
+        windows = generate_available_work_window_slots(time_frame)
 
-        # Loops through the tasks and update their work times if needed
-        for scheduling_tasks in schedule:
-            self.db.update_one({"_id": scheduling_tasks.task_id}, {"$set": {"start": scheduling_tasks.start, "end": scheduling_tasks.end}})
+        # I set it so we cannot create tasks in the past, is that okay with you?
+        now_utc = datetime.now(timezone.utc)
+        windows = self.remaining_work_windows(windows, now_utc)
 
-        # Only return the newest created task, not all of them
-        return next(new_task for new_task in schedule if new_task.task_id == task.task_id)
+        # Sort out all the actual time used by completed tasks
+        for complete in sorted(completed, key=lambda task: task.priority):
+            actual_finish = complete.start + timedelta(hours=complete.tracked_duration)
+            windows = self.remaining_work_windows(windows, actual_finish)
+
+        scheduled_upcoming = schedule_tasks(upcoming, windows)
+
+        for task in scheduled_upcoming:
+            self.db.update_one(
+                {"_id": task.task_id},
+                {"$set": {"start": task.start, "end": task.end}}
+            )
+
+        return next(task for task in scheduled_upcoming
+                    if task.task_id == task.task_id)
 
 
 
@@ -151,23 +165,19 @@ class TaskList():
                     # 1) undo completion & zero tracked_duration
             self.handle_uncompletion(task_uuid, existing, time_frame)
 
-            # 2) reload all tasks, split by completion
+            # Split task based on if they are completed or not
             all_tasks = self.find_all_time_frame_tasks(existing.time_frame_id)["data"]
-            completed = [t for t in all_tasks if t.completed]
-            upcoming  = [t for t in all_tasks if not t.completed]
-
-            # 3) regenerate full work windows
+            completed = [task for task in all_tasks if task.completed]
+            upcoming  = [task for task in all_tasks if not task.completed]
             windows = generate_available_work_window_slots(time_frame)
 
-            # 4) prune windows by each completed task’s actual finish
-            for c in sorted(completed, key=lambda t: t.priority):
-                actual_finish = c.start + timedelta(hours=c.tracked_duration)
+            for complete in sorted(completed, key=lambda t: t.priority):
+                actual_finish = complete.start + timedelta(hours=complete.tracked_duration)
                 windows = self.remaining_work_windows(windows, actual_finish)
 
-            # 5) schedule only the upcoming tasks into the pruned windows
             scheduled = schedule_tasks(upcoming, windows)
 
-            # 6) write back their new start/end
+            # Write back their new start/end
             for t in scheduled:
                 self.db.update_one(
                     {"_id": t.task_id},
@@ -185,7 +195,6 @@ class TaskList():
         return self.find_specific_task(task_id)
 
     def delete_task(self, task_id: str):
-        # 0) validate & load the task-to-delete so we know its time_frame_id & priority
         try:
             uuid = UUID(task_id)
         except ValueError:
@@ -193,13 +202,12 @@ class TaskList():
                                 detail="Invalid task id format")
         to_delete = self.find_specific_task(task_id)
 
-        # 1) delete it
         result = self.db.delete_one({"_id": uuid})
         if not result.deleted_count:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
                                 detail="Task not found")
 
-        # 2) decrement priority of everything that was below it
+        # Decrement priority of everything that was below the task
         self.db.update_many(
             {
                 "time_frame_id": to_delete.time_frame_id,
@@ -208,41 +216,31 @@ class TaskList():
             {"$inc": {"priority": -1}}
         )
 
-        # 3) fetch TimeFrame and remaining tasks
+        # Fetch the TimeFrame and remaining tasks
         tf_doc = self.time_frame_collection.find_one({"_id": to_delete.time_frame_id})
         time_frame = TimeFrame.model_validate(tf_doc)
 
         all_tasks = self.find_all_time_frame_tasks(to_delete.time_frame_id)["data"]
 
-        # 4) split into completed vs upcoming
-        completed = [t for t in all_tasks if t.completed]
-        upcoming  = [t for t in all_tasks if not t.completed]
-
-        # 5) build your COPENHAGEN‐naïve work windows
+        completed = [task for task in all_tasks if task.completed]
+        upcoming  = [task for task in all_tasks if not task.completed]
         windows = generate_available_work_window_slots(time_frame)
 
-        # 6) *shrink* those windows to start *after* each completed task’s *actual* finish
-        #    (we compute actual finish = start + tracked_duration)
-        #    you already have a helper for this in your class:
+        # Ensure the following tasks only start after actual finished time of an older task 
+        # (e.g. if it has been completed and has a tracked_duration)
         for c in sorted(completed, key=lambda t: t.priority):
             actual_finish = c.start + timedelta(hours=c.tracked_duration)
             windows = self.remaining_work_windows(windows, actual_finish)
+        windows = self.remaining_work_windows(windows, to_delete.start)
 
-        # 7) now pack *only* the upcoming tasks into the *remaining* windows
         scheduled_upcoming = schedule_tasks(upcoming, windows)
-
-        # 8) write back start/end for those upcoming tasks
         for t in scheduled_upcoming:
             utc_start = t.start.astimezone(timezone.utc)
             utc_end   = t.end.astimezone(timezone.utc)
 
-            # convert into CEST and strip tzinfo so Mongo stores the correct local clock
-            local_start = utc_start.astimezone(COPENHAGEN).replace(tzinfo=None)
-            local_end   = utc_end.astimezone(COPENHAGEN).replace(tzinfo=None)
-
             self.db.update_one(
                 {"_id": t.task_id},
-                {"$set": {"start": local_start, "end": local_end}}
+                {"$set": {"start": utc_start, "end": utc_end}}
             )
 
         return {"status": status.HTTP_200_OK, "data": {"deleted_task_id": task_id}}
@@ -267,7 +265,7 @@ class TaskList():
                 free.append((start, end))
         return free
 
-    # Reschedule just the downstream tasks
+    # Reschedule just the downstream tasks - used when completing a task
     def reschedule_downstream_tasks(
         self,
         time_frame_id: UUID,
@@ -281,30 +279,20 @@ class TaskList():
             if task.priority > completed_task.priority and not task.completed
         ]
 
-        # 1) convert our original (UTC‐aware) work‐windows into CEST‐aware windows
-        cet_windows = [
-            (w_start.astimezone(COPENHAGEN), w_end.astimezone(COPENHAGEN))
-            for w_start, w_end in original_window
-        ]
-        # 2) likewise convert our completion time to CEST
-        completed_cet = completed_task.end.astimezone(COPENHAGEN)
-
-        # 3) carve out free‐windows *in CEST*
-        free_windows_cet = self.remaining_work_windows(cet_windows, completed_cet)
-
-        # 4) schedule everything in local time…
-        scheduled = schedule_tasks(to_run, free_windows_cet)
-
-        # 5) …and at the last moment strip tzinfo *only* once, writing back naive CEST
+        free_windows = self.remaining_work_windows(original_window, completed_task.end)
+        scheduled = schedule_tasks(to_run, free_windows)
         for task in scheduled:
-            naive_start = task.start.replace(tzinfo=None)
-            naive_end   = task.end.replace(tzinfo=None)
+            utc_start = task.start.astimezone(timezone.utc)
+            utc_end   = task.end.astimezone(timezone.utc)
+
             self.db.update_one(
                 {"_id": task.task_id},
-                {"$set": {"start": naive_start, "end": naive_end}}
+                {"$set": {"start": utc_start, "end": utc_end}}
             )
 
-    # Full reschedule of all tasks in time frame
+    # Full reschedule of all tasks in time frame - used when generating new priority
+    # TODO: Realised it is probably better to use similiar logic to the reschedule_downstream_tasks,
+    # so only tasks with lower priority gets refactored
     def reschedule_all_tasks(
         self,
         all_tasks: List[Task],
@@ -316,11 +304,10 @@ class TaskList():
             
     # tnhe logic of how the task is completed. Here we ensure that the tracked_duration is updated
     def handle_completion(self, task_uuid: UUID, existing: Task, time_frame: TimeFrame) -> datetime:
-        finished_local = datetime.now(tz=ZoneInfo("Europe/Copenhagen"))
-        finished_utc   = finished_local.astimezone(timezone.utc)
+        finished_utc = datetime.now(timezone.utc)
         duration = round(calculate_tracked_duration(
             existing.start,
-            finished_utc, # Sorry, I am tired and I can only get it to work by hard coding it
+            finished_utc, 
             time_frame.work_time_frame_intervals,
         ), 2)
         self.db.update_one(

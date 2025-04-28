@@ -1,5 +1,5 @@
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Tuple
 from ..models.time_frame import TimeFrame, WorkTimeIntervals
 from ..models.task import Task
@@ -23,8 +23,8 @@ def generate_available_work_window_slots(time_frame: TimeFrame) -> List[Tuple[da
             # Loops through each of our work window intervals
             for interval in time_frame.work_time_frame_intervals:
                 # Combines a date in the time frame with the work intervals - it creates a string like this 2025-04-20T08:00:00
-                start = datetime.combine(start_date, interval.start.timetz())
-                end   = datetime.combine(start_date, interval.end.timetz())
+                start = datetime.combine(start_date, interval.start.timetz()).replace(tzinfo=timezone.utc)
+                end   = datetime.combine(start_date, interval.end.timetz()).replace(tzinfo=timezone.utc)
                 work_windows_slots.append((start, end))
         start_date += timedelta(days=1)
     return work_windows_slots
@@ -83,18 +83,18 @@ def calculate_tracked_duration(
 ) -> float:
     """
     Return total hours between "start" and "finished",
-    *including* any time outside the given work windows.
+    including any time outside the given work windows.
     """
     # sort windows by their start
     windows = sorted(windows, key=lambda w: w.start)
     total = timedelta()
 
-    # 1) any time *before* the first window
+    # before the first window
     first = windows[0]
     if start < first.start:
         total += min(finished, first.start) - start
 
-    # 2) time *inside* each window
+    # Find time inside each window
     for w in windows:
         if finished <= w.start:
             break
@@ -103,10 +103,9 @@ def calculate_tracked_duration(
         if overlap_end > overlap_start:
             total += (overlap_end - overlap_start)
 
-    # 3) any time *after* the last window
+    # If task is ending outside a window we include that time
     last = windows[-1]
     if finished > last.end:
         total += (finished - max(start, last.end))
 
-    # return hours as float
     return total.total_seconds() / 3600
