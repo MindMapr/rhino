@@ -6,8 +6,6 @@ WORKDIR /code
 
 # copy requirements to working directory
 COPY ./requirements.txt .
-# NEEDS TO BE REMOVED
-COPY .env /code/.env
 
 # Install newest version of pip
 RUN python -m pip install --upgrade pip
