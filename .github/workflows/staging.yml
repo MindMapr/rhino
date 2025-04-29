@@ -35,7 +35,7 @@ jobs:
           SECRET_KEY=${{ secrets.SECRET_KEY }}
           ALGORITHM=${{ secrets.ALGORITHM }}
           ACCESS_TOKEN_EXPIRE_MINUTES=${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
-          REFRESH_TOKEN_EXPIRE_DAYS=${{ REFRESH_TOKEN_EXPIRE_DAYS }}
+          REFRESH_TOKEN_EXPIRE_DAYS=${{ secrets.REFRESH_TOKEN_EXPIRE_DAYS }}
           EOF
         
       # Login against a Docker registry except on PR
