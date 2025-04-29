@@ -36,7 +36,6 @@ jobs:
             --env ALGORITHM="${{ secrets.ALGORITHM }}" \
             --env ACCESS_TOKEN_EXPIRE_MINUTES="${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}" \
             --env REFRESH_TOKEN_EXPIRE_DAYS="${{ secrets.REFRESH_TOKEN_EXPIRE_DAYS }}" \
-          ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.tags }}
         
       # Login against a Docker registry except on PR
       # https://github.com/docker/login-action
