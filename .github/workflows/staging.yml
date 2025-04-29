@@ -27,6 +27,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Create .env from GitHub Secrets
+        run: |
+          cat <<EOF > .env
+          DB_URI=${{ secrets.DB_URI }}
+          SECRET_KEY=${{ secrets.SECRET_KEY }}
+          ALGORITHM=${{ secrets.ALGORITHM }}
+          ACCESS_TOKEN_EXPIRE_MINUTES=${{ secrets.ACCESS_TOKEN_EXPIRE_MINUTES }}
+          REFRESH_TOKEN_EXPIRE_DAYS=${{ REFRESH_TOKEN_EXPIRE_DAYS }}
+          EOF
         
       # Login against a Docker registry except on PR
       # https://github.com/docker/login-action
