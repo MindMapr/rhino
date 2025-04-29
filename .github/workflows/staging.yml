@@ -65,10 +65,3 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-
-      - name: Deploy the app
-        uses: digitalocean/app_action/deploy@v2
-        env:
-          SAMPLE_DIGEST: ${{ steps.build-and-push.outputs.digest }}
-        with:
-          token: ${{ secrets.DIGITAL_OCEAN }}
