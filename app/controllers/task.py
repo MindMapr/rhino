@@ -27,41 +27,50 @@ class TaskList():
             of each task based on work windows and priority. When a new task is created this
             is also in charge of potential rescheduling of other tasks in same time frame.
         """
-        _ = self.db.insert_one(task.model_dump(by_alias=True))
+        self.db.insert_one(task.model_dump(by_alias=True))
 
         # Find all tasks belonging to the given time frame
-        response = self.find_all_time_frame_tasks(task.time_frame_id)
-        # Since find_all_time_frame_tasks return both status and data, we specify we are only interested in data here.
-        tasks: List[Task] = response["data"]
+        all_documents = list(self.db.find({"time_frame_id": task.time_frame_id}))
+        tasks = [Task.model_validate(document) for document in all_documents]
 
-        time_frame_data = self.time_frame_collection.find_one(task.time_frame_id)
-        # Validate it as a pydantic model instance
-        time_frame = TimeFrame.model_validate(time_frame_data)
+        # Find the task  with priority‐1, if it exists
+        prev = next(
+            (t for t in tasks if t.priority == task.priority - 1),
+            None
+        )
 
-        # Split out completed vs upcoming
-        completed = [t for t in tasks if t.completed]
-        upcoming  = [t for t in tasks if not t.completed]
-        windows = generate_available_work_window_slots(time_frame)
-
-        # I set it so we cannot create tasks in the past, is that okay with you?
         now_utc = datetime.now(timezone.utc)
-        windows = self.remaining_work_windows(windows, now_utc)
 
-        # Sort out all the actual time used by completed tasks
-        for complete in sorted(completed, key=lambda task: task.priority):
-            actual_finish = complete.start + timedelta(hours=complete.tracked_duration)
-            windows = self.remaining_work_windows(windows, actual_finish)
+        if prev is None:
+            # If there is no priority-1 task, we start from current time
+            base_time = now_utc
+        else:
+            # If it was marked completed, we use actual tracked_time finish; otherwise its scheduled .end
+            if prev.completed and prev.tracked_duration is not None:
+                actual_finish = prev.start + timedelta(hours=prev.tracked_duration)
+            else:
+                actual_finish = prev.end
 
-        scheduled_upcoming = schedule_tasks(upcoming, windows)
+            base_time = max(now_utc, actual_finish)
 
-        for task in scheduled_upcoming:
-            self.db.update_one(
-                {"_id": task.task_id},
-                {"$set": {"start": task.start, "end": task.end}}
-            )
+        # Build your work windows from the timeframe:
+        time_frame_document = self.time_frame_collection.find_one({"_id": task.time_frame_id})
+        time_frame = TimeFrame.model_validate(time_frame_document)
+        slots = generate_available_work_window_slots(time_frame)
 
-        return next(task for task in scheduled_upcoming
-                    if task.task_id == task.task_id)
+        # Trim out everything before base_time
+        available = self.remaining_work_windows(slots, base_time)
+
+        scheduled = schedule_tasks([task], available)
+        new_schedule = scheduled[0]
+
+        # Persist its start & end
+        self.db.update_one(
+            {"_id": new_schedule.task_id},
+            {"$set": {"start": new_schedule.start, "end": new_schedule.end}}
+        )
+
+        return new_schedule
 
 
 
@@ -127,7 +136,7 @@ class TaskList():
         # Update and check that it succeeded
         update_field = task.model_dump(exclude_unset=True)
         result = self.db.update_one({"_id": task_uuid}, {"$set": update_field})
-        if result.modified_count == 0:
+        if result.matched_count == 0:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, 
                 detail=not_found_404
@@ -162,37 +171,78 @@ class TaskList():
 
         # Check to update if complete is being updated to false and then reschedule tasks back to the original estimate
         if "completed" in update_field and not completed and existing.completed:
-                    # 1) undo completion & zero tracked_duration
+            # undo completion and zero tracked_duration
             self.handle_uncompletion(task_uuid, existing, time_frame)
 
-            # Split task based on if they are completed or not
             all_tasks = self.find_all_time_frame_tasks(existing.time_frame_id)["data"]
-            completed = [task for task in all_tasks if task.completed]
-            upcoming  = [task for task in all_tasks if not task.completed]
             windows = generate_available_work_window_slots(time_frame)
+            # Finding the task where we need to pivot back from before we completed it
+            pivot = self.find_specific_task(task_id)
 
-            for complete in sorted(completed, key=lambda t: t.priority):
-                actual_finish = complete.start + timedelta(hours=complete.tracked_duration)
-                windows = self.remaining_work_windows(windows, actual_finish)
+            self.reschedule_downstream_tasks(
+                pivot.time_frame_id,
+                all_tasks,
+                windows,
+                pivot
+            )
 
-            scheduled = schedule_tasks(upcoming, windows)
+            return pivot
+        # Check if priority or duration is updated on one of the tasks and then update all time frame tasks accordingly
+        if priority_new != existing.priority or new_estimate != existing.self_estimated_duration:
+                updated = self.find_specific_task(task_id)
 
-            # Write back their new start/end
-            for t in scheduled:
+                time_frame_documents  = self.time_frame_collection.find_one({"_id": updated.time_frame_id})
+                time_frame = TimeFrame.model_validate(time_frame_documents)
+                original_windows = generate_available_work_window_slots(time_frame)
+
+                # Checks to ensure that priorities are handled correctly, as logic from 1st priority and
+                # all others have to be different to keep their correct time slots.
+                if priority_new != existing.priority:
+                    if updated.priority == 1:
+                        original_first = next(
+                            t for t in all_tasks
+                            if t.task_id != updated.task_id and t.priority == 1
+                        )
+                        # To ensure that the time is not set back to the beginning of the time frame, but to 
+                        # the original start
+                        base_time = original_first.start
+                    else:
+                        # pick up after the new (priority-1)
+                        prev = next(
+                            t for t in all_tasks
+                            if t.priority == updated.priority - 1
+                        )
+                        # Ensure that the next task is placed correctly depending on if the previous task 
+                        # has been completed or not
+                        base_time = (
+                            (prev.start + timedelta(hours=prev.tracked_duration))
+                            if (prev.completed and prev.tracked_duration is not None)
+                            else prev.end
+                        )
+
+                else:
+                    # If no priority was updated then keep the old start time to avoid beginning at the first
+                    # work window in time frame
+                    base_time = existing.start
+                # Ensure we only schedule in free work windows
+                free_windows = self.remaining_work_windows(original_windows, base_time)
+
+                # Ensure the schedule is placed at either a free window or take over priority 1s start
+                pivot_schedule = schedule_tasks([updated], free_windows)[0]
+
                 self.db.update_one(
-                    {"_id": t.task_id},
-                    {"$set": {"start": t.start, "end": t.end}}
+                    {"_id": pivot_schedule.task_id},
+                    {"$set": {"start": pivot_schedule.start, "end": pivot_schedule.end}}
                 )
 
-            return self.find_specific_task(task_id)
-        # Check if priority of duration is updated on one of the tasks and then update all time frame tasks accordingly
-        if priority_new != existing.priority or new_estimate != existing.self_estimated_duration:
-            self.reschedule_all_tasks(all_tasks, original_windows)
-            return next(task for task in self.find_all_time_frame_tasks(existing.time_frame_id)["data"]
-                        if task.task_id == task_uuid)
+                self.reschedule_downstream_tasks(
+                    updated.time_frame_id,
+                    all_tasks,
+                    original_windows,
+                    pivot_schedule
+                )
 
-        # Return the orignal task that is being updated
-        return self.find_specific_task(task_id)
+                return self.find_specific_task(task_id)
 
     def delete_task(self, task_id: str):
         try:
@@ -215,31 +265,40 @@ class TaskList():
             },
             {"$inc": {"priority": -1}}
         )
+        
+         # Reload all tasks in that timeframe
+        time_frame_documents = list(self.db.find({"time_frame_id": to_delete.time_frame_id}))
+        all_tasks = [Task.model_validate(document) for document in time_frame_documents]
+
+        # Split into tasks before and after to ensure we update times correclty
+        before = [task for task in all_tasks if task.priority < to_delete.priority]
+        after  = [task for task in all_tasks if task.priority >= to_delete.priority]
 
         # Fetch the TimeFrame and remaining tasks
-        tf_doc = self.time_frame_collection.find_one({"_id": to_delete.time_frame_id})
-        time_frame = TimeFrame.model_validate(tf_doc)
+        time_frame_document = self.time_frame_collection.find_one({"_id": to_delete.time_frame_id})
+        time_frame = TimeFrame.model_validate(time_frame_document)
 
         all_tasks = self.find_all_time_frame_tasks(to_delete.time_frame_id)["data"]
 
-        completed = [task for task in all_tasks if task.completed]
-        upcoming  = [task for task in all_tasks if not task.completed]
         windows = generate_available_work_window_slots(time_frame)
-
-        # Ensure the following tasks only start after actual finished time of an older task 
-        # (e.g. if it has been completed and has a tracked_duration)
-        for c in sorted(completed, key=lambda t: t.priority):
-            actual_finish = c.start + timedelta(hours=c.tracked_duration)
-            windows = self.remaining_work_windows(windows, actual_finish)
         windows = self.remaining_work_windows(windows, to_delete.start)
 
-        scheduled_upcoming = schedule_tasks(upcoming, windows)
-        for t in scheduled_upcoming:
-            utc_start = t.start.astimezone(timezone.utc)
-            utc_end   = t.end.astimezone(timezone.utc)
+        # Ensure the following tasks only start after actual finished time of an older task 
+        for task in sorted(before, key=lambda t: t.priority):
+            if task.completed and task.tracked_duration is not None:
+                end_time = task.start + timedelta(hours=task.tracked_duration)
+            else:
+                end_time = task.end
+            windows = self.remaining_work_windows(windows, end_time)
+
+        # Schedule the after_tasks into the remaining windows
+        scheduled = schedule_tasks(after, windows)
+        for task in scheduled:
+            utc_start = task.start.astimezone(timezone.utc)
+            utc_end   = task.end.astimezone(timezone.utc)
 
             self.db.update_one(
-                {"_id": t.task_id},
+                {"_id": task.task_id},
                 {"$set": {"start": utc_start, "end": utc_end}}
             )
 
@@ -289,20 +348,8 @@ class TaskList():
                 {"_id": task.task_id},
                 {"$set": {"start": utc_start, "end": utc_end}}
             )
-
-    # Full reschedule of all tasks in time frame - used when generating new priority
-    # TODO: Realised it is probably better to use similiar logic to the reschedule_downstream_tasks,
-    # so only tasks with lower priority gets refactored
-    def reschedule_all_tasks(
-        self,
-        all_tasks: List[Task],
-        original_windows: List[Tuple[datetime, datetime]],
-    ) -> None:
-        scheduled = schedule_tasks(all_tasks, original_windows)
-        for task in scheduled:
-            self.db.update_one({"_id": task.task_id}, {"$set": {"start": task.start, "end": task.end}})
             
-    # tnhe logic of how the task is completed. Here we ensure that the tracked_duration is updated
+        # tnhe logic of how the task is completed. Here we ensure that the tracked_duration is updated
     def handle_completion(self, task_uuid: UUID, existing: Task, time_frame: TimeFrame) -> datetime:
         finished_utc = datetime.now(timezone.utc)
         duration = round(calculate_tracked_duration(
