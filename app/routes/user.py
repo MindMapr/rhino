@@ -63,9 +63,12 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
     # response = JSONResponse(
     #     content={"access_token": access_token, "token_type": "bearer"}
     # )
-    # Secure should be set to true for prod
+    # For prod
     response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="none")
     response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=True, samesite="none")
+    # For dev
+    # response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax")
+    # response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax")
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/logout")

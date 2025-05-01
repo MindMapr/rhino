@@ -22,7 +22,7 @@ list_routes = TaskList(collection, time_frame_collection, user_collection)
 # Dependencies
 user_dependency = Annotated[dict, Depends(get_current_user)]
 
-@router.post("/{time_frame_id}", status_code=201)
+@router.post("/time-frame/{time_frame_id}", status_code=201)
 async def create_task(time_frame_id: str, params: CreateTask, current_user: user_dependency, confirm: bool = Query(False)):
     user = UserList(user_collection)
     suggest = user.suggestion_estimation(current_user["_id"], params.category, params.self_estimated_duration, confirm)
@@ -47,11 +47,11 @@ async def create_task(time_frame_id: str, params: CreateTask, current_user: user
 
     return list_routes.create_task(task)
 
-@router.get("/{time_frame_id}/find_all", description="Find all tasks for time frame")
+@router.get("/time-frame/{time_frame_id}/find_all", description="Find all tasks for time frame")
 async def find_all_time_frame_tasks(time_frame_id: str, current_user: user_dependency):
     return list_routes.find_all_time_frame_tasks(time_frame_id)
 
-@router.get("/{id}", description="Find specific task")
+@router.get("/{task_id}", description="Find specific task")
 async def find_specific_task(task_id: str, current_user: user_dependency):
     return list_routes.find_specific_task(task_id)
 
@@ -59,6 +59,6 @@ async def find_specific_task(task_id: str, current_user: user_dependency):
 async def update_task(task_id: str, task: UpdateTask, current_user: user_dependency):
     return list_routes.update_task(task_id, task)
 
-@router.delete("/{id}", description="Delete the task")
+@router.delete("/{task_id}", description="Delete the task")
 async def delete_task(task_id: str, current_user: user_dependency):
     return list_routes.delete_task(task_id)

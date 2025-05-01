@@ -49,7 +49,7 @@ async def get_all_user_specific_time_frames(current_user: user_dependency):
 async def get_active_time_frame(current_user: user_dependency):
     return list_routes.get_active_time_frame(current_user["_id"])
 
-@router.put("/", description="Update a specific time_frame")
+@router.put("/{time_frame_id}", description="Update a specific time_frame")
 async def update_time_frame(time_frame_id: str, time_frame: UpdateTimeFrame, current_user: user_dependency):
     return list_routes.update_time_frame(time_frame_id, time_frame)
 
