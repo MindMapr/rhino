@@ -234,3 +234,19 @@ class UserList:
             ],
             return_document=ReturnDocument.AFTER
         )
+        
+    def suggestion_estimation(self, user_id: str, category: TaskCategory, estimate: float, confirm: bool = False) -> dict | None:
+        print("hit")
+        user = self.db.find_one({"_id": UUID(user_id)})
+        stats_dict = user.get("estimation_average_for_category", {})
+        get_stats = stats_dict.get(category.value, {})
+        avg_error = get_stats.get("avg_pct_error", 0.0)
+        
+        if avg_error and not confirm:
+            print("double hit")
+            suggest = round(estimate * (1 + avg_error / 100), 0) + estimate
+            return {
+                "avg_pct_error": avg_error,
+                "suggested_duration": suggest
+            }
+        return None
