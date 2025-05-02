@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from .routes.user import router as user_v1
 from .routes.time_frame import router as time_frame_v1
 from .routes.task import router as task_v1
+from .routes.feedback import router as feedback_v1
 
 app = FastAPI(
     title="🦏 Rhino Service",
@@ -66,6 +67,7 @@ async def custom_http_exception_handler(request: Request, exc: HTTPException):
 app.include_router(user_v1, prefix="/v1")
 app.include_router(time_frame_v1, prefix="/v1")
 app.include_router(task_v1, prefix="/v1")
+app.include_router(feedback_v1, prefix="/v1")
 
 
 @app.get("/")
