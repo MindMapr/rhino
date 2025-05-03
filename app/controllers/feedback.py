@@ -4,6 +4,8 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from typing import List, Union
 from ..models.feedback import (
+    ContextSpecificFeedback,
+    FeedbackCategory,
     PromptFeedback,
     Feedback,
 )
@@ -34,6 +36,12 @@ class FeedbackList:
         document = feedback.model_dump(by_alias=True, exclude_none=True)
         self.db.insert_one(document)
         return feedback
+    
+    def get_categories(self) -> List[str]:
+        return [category.value for category in FeedbackCategory]
+    
+    def get_prompts(self) -> List[str]:
+        return [prompt.value for prompt in ContextSpecificFeedback]
     
     # Useful for us if we want to find all feedback from one specific user
     def list_by_user(self, user_id: str) -> List[Union[Feedback, PromptFeedback]]:

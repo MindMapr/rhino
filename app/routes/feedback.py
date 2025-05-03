@@ -37,6 +37,13 @@ def create_feedback(params: CreateFeedback, current_user: user_dependency):
     )
     return list_routes.create_feedback(feedback)
 
+@router.get("/feedback")
+def get_category(current_user: user_dependency):
+    return list_routes.get_categories()
+
+@router.get("/prompt")
+def get_prompt(current_user: user_dependency):
+    return list_routes.get_prompts()
 
 @router.get("/user", response_model=List[Union[Feedback, PromptFeedback]])
 def get_by_user(current_user: user_dependency):
