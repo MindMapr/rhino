@@ -74,8 +74,12 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
 @router.post("/logout")
 async def logout_for_access_token(dependencies: user_dependency, response: Response):
     # Ensures both cookies are deleted when the user logs out
-    response.delete_cookie("access_token")
-    response.delete_cookie("refresh_token")
+    # For DEV
+    # response.delete_cookie("access_token")
+    # response.delete_cookie("refresh_token")
+    # For PROD
+    response.delete_cookie(key="access_token", path="/", domain="mindmapr-planner.vercel.app", secure=True, samesite="none")
+    response.delete_cookie(key="refresh_token", path="/", domain="mindmapr-planner.vercel.app", secure=True, samesite="none")
 
 
 @router.put("", description="Update user information")
