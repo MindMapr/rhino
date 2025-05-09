@@ -48,13 +48,6 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         content={"detail": exc.errors()},
     )
 
-
-# TODO: This is used for testing and should be deleted before prod.
-# It is used to check exp time on a decoded jwt token to confirm authentication behavior
-exp = 1745620574
-expiration_time = datetime.fromtimestamp(exp, timezone.utc)
-print(expiration_time)
-
 # Used for sending the HTTPExecptions as a header so we can use it as error responses in frontend
 @app.exception_handler(HTTPException)
 async def custom_http_exception_handler(request: Request, exc: HTTPException):
