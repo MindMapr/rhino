@@ -63,22 +63,22 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
     #     content={"access_token": access_token, "token_type": "bearer"}
     # )
     # For prod
-    # response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="none", domain="mindmapr-planner.vercel.app", path="/")
-    # response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=True, samesite="none", domain="mindmapr-planner.vercel.app", path="/")
+    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=True, samesite="none", domain="mindmapr-planner.vercel.app", path="/")
+    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=True, samesite="none", domain="mindmapr-planner.vercel.app", path="/")
     # For dev
-    response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax")
-    response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax")
+    # response.set_cookie(key="access_token", value=access_token, httponly=True, secure=False, samesite="lax")
+    # response.set_cookie(key="refresh_token", value=refresh_token, httponly=True, secure=False, samesite="lax")
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/logout")
 async def logout_for_access_token(dependencies: user_dependency, response: Response):
     # Ensures both cookies are deleted when the user logs out
     # For DEV
-    response.delete_cookie("access_token")
-    response.delete_cookie("refresh_token")
+    # response.delete_cookie("access_token")
+    # response.delete_cookie("refresh_token")
     # For PROD
-    # response.delete_cookie(key="access_token", path="/", domain="mindmapr-planner.vercel.app", secure=True, samesite="none")
-    # response.delete_cookie(key="refresh_token", path="/", domain="mindmapr-planner.vercel.app", secure=True, samesite="none")
+    response.delete_cookie(key="access_token", path="/", domain="mindmapr-planner.vercel.app", secure=True, samesite="none")
+    response.delete_cookie(key="refresh_token", path="/", domain="mindmapr-planner.vercel.app", secure=True, samesite="none")
 
 
 @router.put("", description="Update user information")
