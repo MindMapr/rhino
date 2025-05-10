@@ -2,7 +2,6 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response
 from typing import Annotated
 from datetime import timedelta
 from fastapi.security import OAuth2PasswordRequestForm
-from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 import os
 
@@ -75,11 +74,11 @@ async def login_for_access_token(form_data: Annotated[OAuth2PasswordRequestForm,
 async def logout_for_access_token(dependencies: user_dependency, response: Response):
     # Ensures both cookies are deleted when the user logs out
     # For DEV
-    # response.delete_cookie("access_token")
-    # response.delete_cookie("refresh_token")
+    response.delete_cookie("access_token")
+    response.delete_cookie("refresh_token")
     # For PROD
-    response.delete_cookie(key="access_token", path="/", domain="mindmapr-planner.vercel.app", secure=True, samesite="none")
-    response.delete_cookie(key="refresh_token", path="/", domain="mindmapr-planner.vercel.app", secure=True, samesite="none")
+    # response.delete_cookie(key="access_token", path="/", domain="mindmapr-planner.vercel.app", secure=True, samesite="none")
+    # response.delete_cookie(key="refresh_token", path="/", domain="mindmapr-planner.vercel.app", secure=True, samesite="none")
 
 
 @router.put("", description="Update user information")

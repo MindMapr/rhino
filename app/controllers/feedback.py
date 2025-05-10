@@ -18,15 +18,15 @@ class FeedbackList:
     
     # Create a new prompt feedback
     def create_prompt(self, prompt_feedback: PromptFeedback) -> PromptFeedback:
-        existing = self.db.find_one({
-            "user_id": prompt_feedback.user_id,
-            "prompt": prompt_feedback.prompt
-        })
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=conflict
-            )
+        # existing = self.db.find_one({
+        #     "user_id": prompt_feedback.user_id,
+        #     "prompt": prompt_feedback.prompt
+        # })
+        # if existing:
+        #     raise HTTPException(
+        #         status_code=status.HTTP_409_CONFLICT,
+        #         detail=conflict
+        #     )
         document = prompt_feedback.model_dump(by_alias=True, exclude_none=True)
         self.db.insert_one(document)
         return prompt_feedback

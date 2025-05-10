@@ -6,6 +6,8 @@ from pydantic import BaseModel, Field
 
 class ContextSpecificFeedback(str, Enum):
     first_average_feedback = "first_average_feedback"
+    completed_after_estimation_suggestion = "completed_after_estimation_suggestion"
+    seen_calendar_first_time = "seen_calendar_first_time"
     
 class FeedbackCategory(str, Enum):
     bug = "bug"
