@@ -242,7 +242,9 @@ class UserList:
         avg_error = get_stats.get("avg_pct_error", 0.0)
         
         if avg_error and not confirm:
-            suggest = round(estimate * (1 + avg_error / 100), 0) + estimate
+            min_allowed = max(0.05, round(estimate * 0.10, 2))
+            suggest =  estimate * (1 + avg_error / 100)
+            suggest = max(min_allowed, suggest)
             return {
                 "avg_pct_error": avg_error,
                 "suggested_duration": suggest
