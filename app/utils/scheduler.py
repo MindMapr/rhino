@@ -34,44 +34,51 @@ def schedule_tasks(tasks: List[Task], work_windows: List[Tuple[datetime, datetim
         Pack each task (in ascending priority) into the available work window slots,
         automatically splitting it across multiple work windows if needed and returns a list
     """
-    # sort by priority
+    # Sort tasks by ascending priority
     tasks = sorted(tasks, key=lambda t: t.priority)
 
-    # Uses a python iterator called iter, works on list, dicts and tuples. Can use the Pythons next to iteratre through them.
-    iterate_through_work_window_slots = iter(work_windows)
-    # Try to iterate through the work windows, unless there are none
-    try:
-        current_start, current_end = next(iterate_through_work_window_slots)
-    except StopIteration:
-        raise RuntimeError("No work windows")
+    # Sort work windows by start time (to ensure time-order)
+    work_windows = sorted(work_windows, key=lambda w: w[0])
+    
+    # Copy work_windows to a mutable list of available slots
+    available_slots = list(work_windows)
 
     for task in tasks:
-        # Keeping track of how much of the task still needs to be allocated time
-        remaing_time_left_on_task = timedelta(hours=task.self_estimated_duration)
+        remaining = timedelta(hours=task.self_estimated_duration)
         task_start = None
+        task_end = None
+        i = 0
 
-        # Continue to go through task until there are no more to schedule
-        while remaing_time_left_on_task > timedelta(0):
-            # if no more time left in work window we try to continue to the next work window, as long as it exists 
-            if current_start >= current_end:
-                try:
-                    current_start, current_end = next(iterate_through_work_window_slots)
-                except StopIteration:
-                    raise RuntimeError("Not enough available work time to schedule all tasks")
+        while remaining > timedelta(0) and i < len(available_slots):
+            window_start, window_end = available_slots[i]
+            window_duration = window_end - window_start
+
+            if window_duration <= timedelta(0):
+                i += 1
+                continue
+
+            # Use as much of this window as needed
+            chunk = min(remaining, window_duration)
 
             if task_start is None:
-                task_start = current_start
+                task_start = window_start
+            task_end = window_start + chunk
 
-            # Looks at how much time is left in the current work window
-            available_left_in_window = current_end - current_start
-            # Checks where there is less time. If there is less time left on task than what is available in current window, it will be assigned to the variable or the other way around.
-            chunk = min(remaing_time_left_on_task, available_left_in_window)
-            current_start += chunk
-            remaing_time_left_on_task -= chunk
+            # Update slot to reflect used time
+            available_slots[i] = (window_start + chunk, window_end)
+            remaining -= chunk
 
-        # Add the correct start and end time to the tasks
+            if available_slots[i][0] >= available_slots[i][1]:
+                # Remove fully used slot
+                del available_slots[i]
+            else:
+                i += 1
+
+        if remaining > timedelta(0):
+            raise RuntimeError("Not enough available work time to schedule all tasks")
+
         task.start = task_start
-        task.end   = current_start
+        task.end = task_end
 
     return tasks
 

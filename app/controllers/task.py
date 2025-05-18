@@ -53,7 +53,7 @@ class TaskList():
 
             base_time = max(now_utc, actual_finish)
 
-        # Build your work windows from the timeframe:
+        # Build work windows from the timeframe:
         time_frame_document = self.time_frame_collection.find_one({"_id": task.time_frame_id})
         time_frame = TimeFrame.model_validate(time_frame_document)
         slots = generate_available_work_window_slots(time_frame)
