@@ -71,7 +71,6 @@ class TimeFrameList():
                 "status": status.HTTP_200_OK,
                 "data": TimeFrame(**result)
             }
-        # We should probably have a check if there is more than two and then discuss the logic if that happens
         else:
             raise HTTPException (
                 status_code=status.HTTP_404_NOT_FOUND,

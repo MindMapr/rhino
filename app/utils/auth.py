@@ -94,7 +94,7 @@ def refresh_for_new_access_token(refresh_token: str):
 # blacklist is for storing invalid tokens, used for logout
 # Based on https://www.restack.io/p/fastapi-logout-answer
 # TODO: blacklist refresh tokens
-blacklist = set()
+# blacklist = set()
 
 # This is used as our dependency for ensuring protected routes
 async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]):
@@ -132,7 +132,8 @@ def decode_for_exp(token: str) -> dict:
 
 # I gave up, this is inspired by an approach suggested by ChatGPT. It works so I
 # will leave it for now, but if we have time I would like to see if there is a way to
-# make the approach cleaner. I have tried to remove some logic into helper functions, to follow DRY
+# make the approach cleaner. 
+# I have tried to remove some logic into helper functions, to follow DRY
 # The purpose is that it is used for protected routes, it checks the access token is not expired
 # if it is we refresh it with the refresh token.
 async def get_current_user_with_refresh(
@@ -169,12 +170,3 @@ async def get_current_user_with_refresh(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="No available refresh token for refresh"
             )
-
-
-# Currently unsure if this actually works - and if we should keep it
-# Right now the logout endpoint deletes the cookies. Should we stick to that or blacklist?
-# async def logout(token: Annotated[str, Depends(oauth2_scheme)]):
-#     blacklist.add(token)
-#     print(blacklist)
-#     # TODO: delete cookie
-#     return {"msg": "Successfully logged out"}

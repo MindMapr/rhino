@@ -4,7 +4,6 @@ from uuid import UUID, uuid4
 from datetime import datetime
 
 from app.models.task import TaskCategory
-# from ..utils.parse_objectId import PydanticObjectId
 
 class CategoryStats(BaseModel):
     history: List[float] = Field(
@@ -25,7 +24,7 @@ class User(BaseModel):
             category: CategoryStats() for category in TaskCategory
         })
     # SUGGESTION: Maybe a personal enum for task they create, that we do not have?
-    # TODO: add profile image?
+    # SUGGESTION: add profile image?
 
     
     @field_validator('password', mode='after') 

@@ -4,7 +4,7 @@ from typing import List, Tuple
 from ..models.time_frame import TimeFrame, WorkTimeIntervals
 from ..models.task import Task
 
-# Scheduler is two helper functions used as a tool to ensure the tasks are placed in accordance with the given time-frame's work windows. It takes the start and end date of the users time frame and the work intervals and build into a tuple list. When given a task it looks at priority and in ascending order, split and places the tasks accordingly.
+# Scheduler is three helper functions used as a tool to ensure the tasks are placed in accordance with the given time-frame's work windows. It takes the start and end date of the users time frame and the work intervals and build into a tuple list. When given a task it looks at priority and in ascending order, split and places the tasks accordingly.
 
 # Helper function for making a list with all dates in time frame and their work window intervals
 def generate_available_work_window_slots(time_frame: TimeFrame) -> List[Tuple[datetime, datetime]]:
@@ -40,7 +40,7 @@ def schedule_tasks(tasks: List[Task], work_windows: List[Tuple[datetime, datetim
     # Sort work windows by start time (to ensure time-order)
     work_windows = sorted(work_windows, key=lambda w: w[0])
     
-    # Copy work_windows to a mutable list of available slots
+    # Copy work_windows to a list of available slots
     available_slots = list(work_windows)
 
     for task in tasks:
@@ -53,11 +53,12 @@ def schedule_tasks(tasks: List[Task], work_windows: List[Tuple[datetime, datetim
             window_start, window_end = available_slots[i]
             window_duration = window_end - window_start
 
+            # Check to not include any invalid work windows
             if window_duration <= timedelta(0):
                 i += 1
                 continue
 
-            # Use as much of this window as needed
+            # Take the needed chunk of the current window
             chunk = min(remaining, window_duration)
 
             if task_start is None:

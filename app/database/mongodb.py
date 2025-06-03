@@ -5,7 +5,7 @@ from pymongo import MongoClient
 from dotenv import load_dotenv
 
 # Loading the connection variable from .env file
-load_dotenv()
+load_dotenv(override=True)
 
 # Connect to the database
 atlas_uri = os.getenv("DB_URI")

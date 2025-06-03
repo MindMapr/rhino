@@ -24,7 +24,7 @@ class Task(BaseModel):
     start: datetime = Field(..., description="The expected start of the task")
     end: datetime = Field(..., description="The expected end of task")
     category: TaskCategory = Field(..., description="The category type of the task")
-    description: Optional[str] = "" # Should we do None or empty string?
+    description: Optional[str] = ""
     completed: bool = Field(default=False, description="Check if task has been completed")
 
 class UpdateTask(BaseModel):

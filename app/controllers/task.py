@@ -1,9 +1,7 @@
 from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
 from fastapi import HTTPException, status
 from uuid import UUID
 from typing import List, Tuple, Union
-from pymongo import UpdateOne
 
 from app.controllers.user import UserList
 from ..utils.scheduler import calculate_tracked_duration, generate_available_work_window_slots, schedule_tasks
@@ -24,20 +22,14 @@ class TaskList():
     def create_task(self, task: Task):
         """
             Creates a new task and uses the scheduler to place the correct start and end time
-            of each task based on work windows and priority. When a new task is created this
-            is also in charge of potential rescheduling of other tasks in same time frame.
+            of each task based on work windows and priority.
         """
-        self.db.insert_one(task.model_dump(by_alias=True))
-
-        # Find all tasks belonging to the given time frame
-        all_documents = list(self.db.find({"time_frame_id": task.time_frame_id}))
-        tasks = [Task.model_validate(document) for document in all_documents]
-
+        # Find work windows
+        time_frame_document = self.time_frame_collection.find_one({"_id": task.time_frame_id})
+        time_frame = TimeFrame.model_validate(time_frame_document)
         # Find the task  with priority‐1, if it exists
-        prev = next(
-            (t for t in tasks if t.priority == task.priority - 1),
-            None
-        )
+        prev_task = self.db.find_one({"time_frame_id": task.time_frame_id, "priority": task.priority - 1})
+        prev = Task.model_validate(prev_task) if prev_task else None
 
         now_utc = datetime.now(timezone.utc)
 
@@ -45,32 +37,30 @@ class TaskList():
             # If there is no priority-1 task, we start from current time
             base_time = now_utc
         else:
-            # If it was marked completed, we use actual tracked_time finish; otherwise its scheduled .end
+            # If it was marked completed, we use actual tracked_time finish otherwise its scheduled .end
             if prev.completed and prev.tracked_duration is not None:
                 actual_finish = prev.start + timedelta(hours=prev.tracked_duration)
             else:
                 actual_finish = prev.end
 
+            # base_time is used so we can ignore past time that should not be changed
             base_time = max(now_utc, actual_finish)
 
         # Build work windows from the timeframe:
-        time_frame_document = self.time_frame_collection.find_one({"_id": task.time_frame_id})
-        time_frame = TimeFrame.model_validate(time_frame_document)
         slots = generate_available_work_window_slots(time_frame)
 
         # Trim out everything before base_time
         available = self.remaining_work_windows(slots, base_time)
 
         scheduled = schedule_tasks([task], available)
-        new_schedule = scheduled[0]
+        scheduled = scheduled[0]
 
         # Persist its start & end
-        self.db.update_one(
-            {"_id": new_schedule.task_id},
-            {"$set": {"start": new_schedule.start, "end": new_schedule.end}}
-        )
+        task.start = scheduled.start
+        task.end = scheduled.end
+        self.db.insert_one(task.model_dump(by_alias=True))
 
-        return new_schedule
+        return scheduled 
 
 
 
@@ -119,7 +109,8 @@ class TaskList():
                 detail="No task found"
             )
 
-    # TODO: We need to fix the update tasks and creation of a new one. Currently, it does work, but if a user suddenly has a lot of tasks and we call all of them individual to update them, it can potentially create bottlenecks.
+    # TODO: We need to fix the update tasks and creation of a new one. Currently, it does work, but if a user suddenly has a lot of future tasks and we call all of them individual to update them, it can potentially create bottlenecks.
+    # Update task returns a task
     def update_task(self, task_id: str, task: UpdateTask) -> Task:
         """
             Updates a task. If the field contains completed, priority or duration it will also update all other tasks for that time frame to ensure they have the correct time allocated.
@@ -173,35 +164,27 @@ class TaskList():
         if "completed" in update_field and not completed and existing.completed:
             # undo completion and zero tracked_duration
             self.handle_uncompletion(task_uuid, existing, time_frame)
-
-            all_tasks = self.find_all_time_frame_tasks(existing.time_frame_id)["data"]
-            windows = generate_available_work_window_slots(time_frame)
             # Finding the task where we need to pivot back from before we completed it
             pivot = self.find_specific_task(task_id)
 
             self.reschedule_downstream_tasks(
                 pivot.time_frame_id,
                 all_tasks,
-                windows,
+                original_windows,
                 pivot
             )
 
             return pivot
         # Check if priority or duration is updated on one of the tasks and then update all time frame tasks accordingly
         if priority_new != existing.priority or new_estimate != existing.self_estimated_duration:
-                updated = self.find_specific_task(task_id)
-
-                time_frame_documents  = self.time_frame_collection.find_one({"_id": updated.time_frame_id})
-                time_frame = TimeFrame.model_validate(time_frame_documents)
-                original_windows = generate_available_work_window_slots(time_frame)
-
+                existing = self.find_specific_task(task_id)
                 # Checks to ensure that priorities are handled correctly, as logic from 1st priority and
                 # all others have to be different to keep their correct time slots.
                 if priority_new != existing.priority:
-                    if updated.priority == 1:
+                    if existing.priority == 1:
                         original_first = next(
                             t for t in all_tasks
-                            if t.task_id != updated.task_id and t.priority == 1
+                            if t.task_id != existing.task_id and t.priority == 1
                         )
                         # To ensure that the time is not set back to the beginning of the time frame, but to 
                         # the original start
@@ -210,7 +193,7 @@ class TaskList():
                         # pick up after the new (priority-1)
                         prev = next(
                             t for t in all_tasks
-                            if t.priority == updated.priority - 1
+                            if t.priority == existing.priority - 1
                         )
                         # Ensure that the next task is placed correctly depending on if the previous task 
                         # has been completed or not
@@ -228,7 +211,7 @@ class TaskList():
                 free_windows = self.remaining_work_windows(original_windows, base_time)
 
                 # Ensure the schedule is placed at either a free window or take over priority 1s start
-                pivot_schedule = schedule_tasks([updated], free_windows)[0]
+                pivot_schedule = schedule_tasks([existing], free_windows)[0]
 
                 self.db.update_one(
                     {"_id": pivot_schedule.task_id},
@@ -236,7 +219,7 @@ class TaskList():
                 )
 
                 self.reschedule_downstream_tasks(
-                    updated.time_frame_id,
+                    existing.time_frame_id,
                     all_tasks,
                     original_windows,
                     pivot_schedule
@@ -270,7 +253,9 @@ class TaskList():
         time_frame_documents = list(self.db.find({"time_frame_id": to_delete.time_frame_id}))
         all_tasks = [Task.model_validate(document) for document in time_frame_documents]
 
-        # Split into tasks before and after to ensure we update times correclty
+        # Split into tasks before and after to ensure we update times correclty.
+        # If we do not keep track of the before task it will not reschedule later tasks properly
+        # However, it could probably be refactored to just finding the one task before and not the whole list...
         before = [task for task in all_tasks if task.priority < to_delete.priority]
         after  = [task for task in all_tasks if task.priority >= to_delete.priority]
 

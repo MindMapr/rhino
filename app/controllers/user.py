@@ -67,7 +67,7 @@ class UserList:
     
     def authenticate_user(self, username: str, password: str):
         """
-            Takes the users usernamer and passowrd, verify the hased password and returns the user
+            Takes the users usernamer and password, verify the hased password and returns the user
         """
         user = self.get_user_by_username(username=username)
         if not user:
@@ -125,6 +125,7 @@ class UserList:
 
 
     # Delete user from database
+    # TODO: Should we also delete time frames and tasks matching the user?
     def delete_user(self, user_id: str):
         """
             Deletes a user from the database based on their id
@@ -204,22 +205,24 @@ class UserList:
         Remove the given pct_error from performance.<category>.history
         and recompute avg_pct_error (rounded to 0 decimals).
         """
-        key = category.value  # e.g. "reading"
+        key = category.value
 
         self.db.find_one_and_update(
             {"_id": user_id},
             [
-                # Stage 1: filter out any entry equal to pct_error
+                # remove the percentage matching to the uncompleted task
                 {"$set": {
                     f"estimation_average_for_category.{key}.history": {
                         "$filter": {
                             "input": f"$estimation_average_for_category.{key}.history",
+                            # While going through the list each element is refered to as e
                             "as": "e",
+                            # $ ne = not equal to
                             "cond": {"$ne": ["$$e", pct_error]}
                         }
                     }
                 }},
-                # Stage 2: recompute & round the average (or zero if empty)
+                # recalulate the new mean
                 {"$set": {
                     f"estimation_average_for_category.{key}.avg_pct_error": {
                         "$round": [
@@ -237,6 +240,7 @@ class UserList:
         
     def suggestion_estimation(self, user_id: str, category: TaskCategory, estimate: float, confirm: bool = False) -> dict | None:
         user = self.db.find_one({"_id": UUID(user_id)})
+        # either get value or empty dict
         stats_dict = user.get("estimation_average_for_category", {})
         get_stats = stats_dict.get(category.value, {})
         avg_error = get_stats.get("avg_pct_error", 0.0)
